@@ -1,0 +1,12 @@
+{
+  "name": "CrimeVerse AI",
+  "description": "AI-Powered Crime Intelligence Digital Twin for Predictive Policing and Automated Criminal Knowledge Extraction",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
