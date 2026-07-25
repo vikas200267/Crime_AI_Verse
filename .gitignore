@@ -1,0 +1,8 @@
+node_modules/
+dist/
+tmp/
+*.pptx
+*.pptx.inspect.ndjson
+*.log
+.env
+.DS_Store

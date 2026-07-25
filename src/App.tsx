@@ -915,6 +915,7 @@ export default function App() {
                         const { cx, cy } = mapCoordsToSvg(mainHotspot.coords[0], mainHotspot.coords[1]);
                         const isHovered = hoveredDistrict?.d.name === d.name;
                         const isSelected = selectedDistrict === d.name;
+                        const isSecondarySelection = compareMode && d.name === compareDistrict;
                         const isHighlighted = isHovered || isSelected;
                         const colorClass = 
                           d.riskLevel === "Critical" ? "#ef4444" :
