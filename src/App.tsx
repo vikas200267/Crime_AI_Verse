@@ -134,10 +134,10 @@ async function getJson<T>(url: string): Promise<T> {
 
 function SectionCard({ title, children, className = "", action }: { title?: string; children: ReactNode; className?: string; action?: ReactNode }) {
   return (
-    <section className={classNames("rounded-xl border border-slate-200 bg-white p-3 shadow-sm", className)}>
+    <section className={classNames("rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm ring-1 ring-white/70", className)}>
       {(title || action) && (
         <div className="mb-2 flex items-center justify-between gap-3">
-          {title && <h2 className="text-xs font-extrabold uppercase text-[#063f9f]">{title}</h2>}
+          {title && <h2 className="min-w-0 text-xs font-extrabold uppercase text-[#063f9f]">{title}</h2>}
           {action}
         </div>
       )}
@@ -158,7 +158,7 @@ function Sidebar({ active, setActive }: { active: ModuleKey; setActive: (module:
   ];
 
   return (
-    <aside className="sticky top-3 h-[calc(100vh-24px)] w-[72px] shrink-0 rounded-xl bg-[#06295c] p-2 text-white shadow-[0_16px_36px_rgba(6,41,92,0.28)]">
+    <aside className="sticky top-3 hidden h-[calc(100vh-24px)] w-[72px] shrink-0 rounded-xl bg-[#06295c] p-2 text-white shadow-[0_16px_36px_rgba(6,41,92,0.28)] md:block">
       <nav className="flex h-full flex-col items-center gap-2">
         {items.map(([key, Icon, label]) => (
           <button
@@ -188,14 +188,17 @@ function KarnatakaMap({
   selectedDistrict: string;
   onSelectDistrict: (district: string) => void;
 }) {
+  const [zoom, setZoom] = useState(1);
+  const visibleDistricts = districts.filter((district) => selectedDistrict === "All Districts" || district.name === selectedDistrict);
+
   return (
-    <div className="relative min-h-[330px] overflow-hidden rounded-lg bg-[#fbfdff]">
+    <div className="relative min-h-[330px] overflow-hidden rounded-lg bg-[radial-gradient(circle_at_20%_20%,#f8fbff_0,#ffffff_42%,#eef5ff_100%)]">
       <div className="absolute left-3 top-10 z-10 flex flex-col overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-        <button className="h-8 w-8 text-base font-semibold text-slate-700" title="Zoom in">+</button>
-        <button className="h-8 w-8 border-t border-slate-200 text-base font-semibold text-slate-700" title="Zoom out">−</button>
+        <button onClick={() => setZoom((value) => Math.min(1.25, value + 0.08))} className="h-8 w-8 text-base font-semibold text-slate-700 hover:bg-blue-50" title="Zoom in">+</button>
+        <button onClick={() => setZoom((value) => Math.max(0.86, value - 0.08))} className="h-8 w-8 border-t border-slate-200 text-base font-semibold text-slate-700 hover:bg-blue-50" title="Zoom out">-</button>
       </div>
 
-      <svg viewBox="0 0 560 500" className="absolute inset-0 h-full w-full">
+      <svg viewBox="0 0 560 500" className="absolute inset-0 h-full w-full transition-transform duration-300" style={{ transform: `scale(${zoom})` }}>
         <defs>
           <filter id="softGlow">
             <feGaussianBlur stdDeviation="8" />
@@ -246,8 +249,8 @@ function KarnatakaMap({
           </text>
         ))}
 
-        {districts.map((district) => {
-          const pos = districtMapPositions[district.name] ?? { x: 45 + Math.random() * 12, y: 40 + Math.random() * 20 };
+        {visibleDistricts.map((district) => {
+          const pos = districtMapPositions[district.name] ?? { x: 48, y: 48 };
           const color = district.riskLevel === "Critical" ? "#ef4444" : district.riskLevel === "High" ? "#f97316" : district.riskLevel === "Medium" ? "#fbbf24" : "#22c55e";
           const radius = district.crimeIndex >= 80 ? 28 : district.crimeIndex >= 60 ? 22 : 17;
           return (
@@ -295,8 +298,10 @@ export default function App() {
   const [anomalies, setAnomalies] = useState<AnomalySet | null>(null);
   const [graphInsights, setGraphInsights] = useState<GraphInsights | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState("All Districts");
+  const [selectedStation, setSelectedStation] = useState("All Police Stations");
   const [category, setCategory] = useState("All");
   const [timeRange, setTimeRange] = useState("30D");
+  const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>("");
@@ -307,6 +312,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const refreshData = async () => {
     setError(null);
@@ -352,13 +358,30 @@ export default function App() {
     return () => window.clearTimeout(handle);
   }, [searchQuery]);
 
+  useEffect(() => {
+    if (!actionMessage) return;
+    const handle = window.setTimeout(() => setActionMessage(null), 4200);
+    return () => window.clearTimeout(handle);
+  }, [actionMessage]);
+
   const districtNames = useMemo(() => ["All Districts", ...districts.map((item) => item.name)], [districts]);
-  const stationNames = useMemo(() => ["All Police Stations", ...new Set(incidents.map((incident) => `${incident.location.area} PS`))], [incidents]);
+  const stationNames = useMemo(
+    () => [
+      "All Police Stations",
+      ...new Set(
+        incidents
+          .filter((incident) => selectedDistrict === "All Districts" || incident.location.district === selectedDistrict)
+          .map((incident) => `${incident.location.area} PS`)
+      )
+    ],
+    [incidents, selectedDistrict]
+  );
   const selectedIncident = incidents.find((incident) => incident.id === selectedIncidentId) ?? analysisResult?.incident ?? incidents[0];
   const activeDistrict = selectedDistrict === "All Districts" ? districts[0] : districts.find((district) => district.name === selectedDistrict) ?? districts[0];
 
   const filteredIncidents = incidents.filter((incident) => {
     const districtMatch = selectedDistrict === "All Districts" || incident.location.district === selectedDistrict;
+    const stationMatch = selectedStation === "All Police Stations" || `${incident.location.area} PS` === selectedStation;
     const categoryMatch = category === "All" || incident.category === category;
     const query = searchQuery.trim().toLowerCase();
     const queryMatch =
@@ -367,7 +390,7 @@ export default function App() {
         .join(" ")
         .toLowerCase()
         .includes(query);
-    return districtMatch && categoryMatch && queryMatch;
+    return districtMatch && stationMatch && categoryMatch && queryMatch;
   });
 
   const trendData = timeLabels.map((day, index) => ({
@@ -412,6 +435,8 @@ export default function App() {
         modelSignals: data.extraction.modelSignals
       });
       setSelectedIncidentId(data.incident.id);
+      setActiveModule("cases");
+      setActionMessage(`EvidenceFlow AI created ${data.incident.id} and refreshed graph, alerts, predictions, and recommendations.`);
       await refreshData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Evidence analysis failed");
@@ -435,6 +460,7 @@ export default function App() {
       if (!response.ok) throw new Error("Scenario simulation failed");
       const data = (await response.json()) as { success: boolean; scenario: SimulationScenario };
       setScenario(data.scenario);
+      setActionMessage(`${data.scenario.interventionType} simulation completed for ${data.scenario.targetDistrict}.`);
       await refreshData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scenario simulation failed");
@@ -447,6 +473,7 @@ export default function App() {
     setBusyAction(`${action}-${id}`);
     try {
       await fetch(`/api/recommendations/${id}/${action}`, { method: "POST" });
+      setActionMessage(`Recommendation ${action === "deploy" ? "deployed" : "dismissed"} and backend state refreshed.`);
       await refreshData();
     } finally {
       setBusyAction(null);
@@ -455,6 +482,7 @@ export default function App() {
 
   const markAlertRead = async (id: string) => {
     await fetch(`/api/alerts/${id}/read`, { method: "POST" });
+    setActionMessage("Alert marked as reviewed.");
     await refreshData();
   };
 
@@ -464,7 +492,24 @@ export default function App() {
       await fetch("/api/reset", { method: "POST" });
       setAnalysisResult(null);
       setScenario(null);
+      setSelectedDistrict("All Districts");
+      setSelectedStation("All Police Stations");
+      setCategory("All");
+      setSearchQuery("");
+      setActionMessage("Digital twin demo state reset from backend.");
       await refreshData();
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const refreshIntelligence = async () => {
+    setBusyAction("refresh");
+    try {
+      await refreshData();
+      setActionMessage("Live backend intelligence APIs refreshed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to refresh intelligence APIs.");
     } finally {
       setBusyAction(null);
     }
@@ -486,8 +531,8 @@ export default function App() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#f5f8fc] text-[#07152f]">
-      <header className="border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <main className="min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#f8fbff_0%,#edf4fb_44%,#f7fafc_100%)] text-[#07152f]">
+      <header className="border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
         <div className="grid gap-3 xl:grid-cols-[270px_1fr_280px] xl:items-center">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-[#06295c] text-[#06295c]">
@@ -500,7 +545,7 @@ export default function App() {
           </div>
           <div className="text-left xl:text-center">
             <h1 className="text-xl font-black leading-tight tracking-normal text-[#07152f] md:text-2xl">
-              EvidenceFlow AI — Crime Intelligence Command Center
+              EvidenceFlow AI - Crime Intelligence Command Center
             </h1>
             <p className="text-sm font-medium text-[#07152f] md:text-base">From Data to Decision. From Intelligence to Impact.</p>
           </div>
@@ -560,7 +605,14 @@ export default function App() {
           </div>
 
           <label className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold shadow-sm">
-            <select value={selectedDistrict} onChange={(event) => setSelectedDistrict(event.target.value)} className="w-full bg-transparent outline-none">
+            <select
+              value={selectedDistrict}
+              onChange={(event) => {
+                setSelectedDistrict(event.target.value);
+                setSelectedStation("All Police Stations");
+              }}
+              className="w-full bg-transparent outline-none"
+            >
               {districtNames.map((name) => (
                 <option key={name}>{name}</option>
               ))}
@@ -568,31 +620,84 @@ export default function App() {
           </label>
 
           <label className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold shadow-sm">
-            <select className="w-full bg-transparent outline-none">
+            <select value={selectedStation} onChange={(event) => setSelectedStation(event.target.value)} className="w-full bg-transparent outline-none">
               {stationNames.map((name) => (
                 <option key={name}>{name}</option>
               ))}
             </select>
           </label>
 
-          <button className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold shadow-sm">
+          <button onClick={() => setShowFilters((value) => !value)} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold shadow-sm hover:border-blue-300 hover:bg-blue-50">
             <CalendarDays className="h-4 w-4" />
             {timeRange} Intelligence Window
             <ChevronDown className="h-4 w-4" />
           </button>
 
-          <button onClick={() => setActiveModule("analytics")} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold shadow-sm">
+          <button onClick={() => { setShowFilters((value) => !value); setActiveModule("analytics"); }} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold shadow-sm hover:border-blue-300 hover:bg-blue-50">
             <Filter className="h-4 w-4" />
             Filters
           </button>
         </div>
 
+        {showFilters && (
+          <div className="mb-3 grid gap-3 rounded-xl border border-blue-100 bg-white/95 p-3 shadow-sm lg:grid-cols-[1fr_auto]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-xs font-black uppercase text-[#063f9f]">Crime Category</span>
+              {categories.map((item) => (
+                <button key={item} onClick={() => setCategory(item)} className={classNames("rounded-full border px-3 py-1.5 text-xs font-black", category === item ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-blue-50")}>
+                  {item}
+                </button>
+              ))}
+              <span className="ml-2 mr-1 text-xs font-black uppercase text-[#063f9f]">Window</span>
+              {["7D", "30D", "90D", "YTD"].map((item) => (
+                <button key={item} onClick={() => setTimeRange(item)} className={classNames("rounded-full border px-3 py-1.5 text-xs font-black", timeRange === item ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-blue-50")}>
+                  {item}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                setSelectedDistrict("All Districts");
+                setSelectedStation("All Police Stations");
+                setCategory("All");
+                setSearchQuery("");
+                setActionMessage("Filters cleared and live intelligence view refreshed.");
+              }}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black text-[#06295c] hover:bg-slate-100"
+            >
+              Clear Filters
+            </button>
+          </div>
+        )}
+
         {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
+        {actionMessage && <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{actionMessage}</div>}
+
+        <div className="mb-3 flex gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm md:hidden">
+          {([
+            ["dashboard", LayoutDashboard, "Dashboard"],
+            ["cases", BriefcaseBusiness, "Cases"],
+            ["analytics", BarChart3, "Analytics"],
+            ["graph", Network, "Graph"],
+            ["alerts", Bell, "Alerts"],
+            ["reports", ClipboardList, "Reports"],
+            ["settings", Settings, "Settings"]
+          ] satisfies Array<[ModuleKey, LucideIcon, string]>).map(([key, Icon, label]) => (
+            <button
+              key={key}
+              onClick={() => setActiveModule(key)}
+              className={classNames("flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-black", activeModule === key ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-[#06295c]")}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
 
         <div className="flex gap-3">
           <Sidebar active={activeModule} setActive={setActiveModule} />
 
-          <div className="grid min-w-0 flex-1 gap-3 2xl:grid-cols-[280px_minmax(520px,1fr)_360px]">
+          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[270px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(520px,1fr)_360px]">
             <div className="space-y-3">
               <SectionCard title="Command Center Modules">
                 <div className="grid gap-2">
@@ -612,7 +717,11 @@ export default function App() {
                     >
                       <Icon className="h-9 w-9 shrink-0 text-[#063f9f]" />
                       <span>
-                        <span className="block text-xs font-black uppercase text-[#06295c]">{title}</span>
+                        <span className="flex items-center justify-between gap-2 text-xs font-black uppercase text-[#06295c]">
+                          <span>{title}</span>
+                          {key === "evidence" && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] text-blue-700">{incidents.length}</span>}
+                          {key === "graph" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] text-emerald-700">{graph.nodes.length}</span>}
+                        </span>
                         <span className="mt-1 block text-[11px] font-medium leading-4 text-slate-700">{body}</span>
                       </span>
                     </button>
@@ -796,6 +905,13 @@ export default function App() {
                               <td className="px-3 py-2"><StatusPill tone="blue">{incident.status}</StatusPill></td>
                             </tr>
                           ))}
+                          {filteredIncidents.length === 0 && (
+                            <tr>
+                              <td colSpan={6} className="px-3 py-8 text-center text-sm font-semibold text-slate-500">
+                                No FIR records match the current filters.
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -825,6 +941,9 @@ export default function App() {
                             <div className="mt-2 text-[11px] font-semibold text-slate-600">Confidence {hotspot.confidence}% · {hotspot.drivers.slice(0, 2).join(", ")}</div>
                           </button>
                         ))}
+                        {(predictions?.hotspotPredictions ?? []).length === 0 && (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-500">No hotspot predictions available from backend.</div>
+                        )}
                       </div>
                     </div>
                     <div className="rounded-lg border border-slate-200 p-3">
@@ -840,6 +959,9 @@ export default function App() {
                             <StatusPill tone={anomaly.severity === "High" ? "red" : "orange"}>{anomaly.severity}</StatusPill>
                           </div>
                         ))}
+                        {(anomalies?.anomalies ?? []).length === 0 && (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-500">No anomaly signals available from backend.</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -891,8 +1013,14 @@ export default function App() {
                   <div className="grid gap-3 xl:grid-cols-2">
                     <div className="rounded-lg border border-slate-200 p-4">
                       <h3 className="text-xs font-black uppercase text-[#063f9f]">System Controls</h3>
-                      <button onClick={refreshData} className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white">Refresh Intelligence APIs</button>
-                      <button onClick={resetTwin} disabled={busyAction === "reset"} className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-black text-[#06295c]">Reset Digital Twin Demo State</button>
+                      <button onClick={refreshIntelligence} disabled={busyAction === "refresh"} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60">
+                        {busyAction === "refresh" && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Refresh Intelligence APIs
+                      </button>
+                      <button onClick={resetTwin} disabled={busyAction === "reset"} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-black text-[#06295c] disabled:opacity-60">
+                        {busyAction === "reset" && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Reset Digital Twin Demo State
+                      </button>
                     </div>
                     <div className="rounded-lg border border-slate-200 p-4">
                       <h3 className="text-xs font-black uppercase text-[#063f9f]">Backend Connection</h3>
@@ -911,7 +1039,7 @@ export default function App() {
                     <div className="space-y-3">
                       <div className="rounded-xl border border-slate-200 bg-white p-3">
                         <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">Select Crime Category</h3>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex max-h-28 flex-wrap gap-2 overflow-auto pr-1">
                           {categories.map((item) => (
                             <button key={item} onClick={() => setCategory(item)} className={classNames("rounded-md border px-3 py-2 text-[11px] font-bold", category === item ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700")}>
                               {item}
@@ -931,6 +1059,15 @@ export default function App() {
                               <span>{risk.score}</span>
                             </button>
                           ))}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                        <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">Active View</h3>
+                        <div className="flex flex-wrap gap-2">
+                          <StatusPill tone="blue">{selectedDistrict}</StatusPill>
+                          <StatusPill tone="slate">{selectedStation}</StatusPill>
+                          <StatusPill tone="orange">{category}</StatusPill>
+                          <StatusPill tone="green">{timeRange}</StatusPill>
                         </div>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -1091,8 +1228,8 @@ export default function App() {
                         <span className="text-lg font-black text-emerald-600">{primaryRecommendation.confidence}%</span>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2">
-                        <button onClick={() => updateRecommendation(primaryRecommendation.id, "deploy")} className="rounded-md bg-[#06295c] px-3 py-2 text-xs font-black text-white">Deploy</button>
-                        <button onClick={() => updateRecommendation(primaryRecommendation.id, "dismiss")} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black text-[#06295c]">Dismiss</button>
+                        <button disabled={busyAction === `deploy-${primaryRecommendation.id}`} onClick={() => updateRecommendation(primaryRecommendation.id, "deploy")} className="rounded-md bg-[#06295c] px-3 py-2 text-xs font-black text-white disabled:opacity-60">Deploy</button>
+                        <button disabled={busyAction === `dismiss-${primaryRecommendation.id}`} onClick={() => updateRecommendation(primaryRecommendation.id, "dismiss")} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black text-[#06295c] disabled:opacity-60">Dismiss</button>
                       </div>
                     </div>
                   </div>
