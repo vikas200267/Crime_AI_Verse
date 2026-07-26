@@ -154,6 +154,38 @@ Default local URL:
 http://localhost:8180
 ```
 
+## Catalyst Deployment
+
+This project is prepared for Zoho Catalyst deployment using **Catalyst AppSail managed runtime**.
+
+Recommended Catalyst project:
+
+```text
+Project-Rainfall
+PID: 44619000000013025
+```
+
+The app is a full-stack React + Express command center, so AppSail is the recommended deployment target because it serves both the frontend and `/api/*` AI intelligence endpoints from one Catalyst-managed Node.js runtime.
+
+Catalyst-ready files:
+
+- `app-config.json`
+- `docs/catalyst-deployment.md`
+
+The server listens on Catalyst's AppSail port variable:
+
+```text
+X_ZOHO_CATALYST_LISTEN_PORT
+```
+
+Local development still defaults to:
+
+```text
+PORT=8180
+```
+
+See [Catalyst Deployment Plan](docs/catalyst-deployment.md) for the service mapping and deploy commands.
+
 ## Validation
 
 The prototype has been validated with:

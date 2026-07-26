@@ -5,7 +5,7 @@ import { createBlueprintRouter } from "./backend/api/routes/blueprint.routes";
 import { createIntelligenceRouter } from "./backend/api/routes/intelligence.routes";
 
 const app = express();
-const port = Number(process.env.PORT ?? 8180);
+const port = Number(process.env.X_ZOHO_CATALYST_LISTEN_PORT ?? process.env.PORT ?? 8180);
 const intelligenceEngine = new CrimeverseAiEngine();
 const projectRoot = process.cwd();
 const isProductionServer = process.env.NODE_ENV === "production" || (process.argv[1] ?? "").endsWith("server.cjs");
