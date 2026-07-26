@@ -1,8 +1,16 @@
 import type { Request, Response } from "express";
 import { CrimeverseAiEngine } from "../../ai/crimeverse-ai-engine";
+import { CatalystIntegration } from "../../catalyst/catalyst-integration";
 
 export class IntelligenceController {
-  constructor(private readonly engine: CrimeverseAiEngine) {}
+  constructor(
+    private readonly engine: CrimeverseAiEngine,
+    private readonly catalyst: CatalystIntegration
+  ) {}
+
+  private actor(request: Request) {
+    return this.catalyst.getSession(request.headers.authorization)?.user.name ?? "DCP Admin";
+  }
 
   metrics(_request: Request, response: Response) {
     response.json(this.engine.getState().districts);
@@ -25,28 +33,52 @@ export class IntelligenceController {
   }
 
   reset(_request: Request, response: Response) {
-    response.json({ success: true, ...this.engine.reset() });
+    const resetState = this.engine.reset();
+    this.catalyst.recordEvent("digital-twin.reset", "DCP Admin", "CrimeVerse AI digital twin demo state reset.");
+    response.json({ success: true, ...resetState });
   }
 
   analyzeEvidence(request: Request, response: Response) {
     const body = request.body as { text?: string; filename?: string };
-    response.json(this.engine.analyzeEvidence(body.text ?? "", body.filename));
+    const result = this.engine.analyzeEvidence(body.text ?? "", body.filename);
+    if (result.success && "incident" in result) {
+      const incident = result.incident;
+      if (!incident) {
+        response.status(500).json({ success: false, error: "Evidence analysis completed without an incident payload." });
+        return;
+      }
+      const object = this.catalyst.createEvidenceObject(body.filename ?? "manual-fir-entry.txt", Buffer.byteLength(body.text ?? ""), this.actor(request));
+      this.catalyst.recordEvent("ai.evidence.analyzed", this.actor(request), `EvidenceFlow AI analyzed ${incident.id} and updated graph intelligence.`);
+      response.json({ ...result, catalyst: { evidenceObject: object } });
+      return;
+    }
+    response.json(result);
   }
 
   runScenario(request: Request, response: Response) {
-    response.json(this.engine.runSimulation(request.body));
+    const result = this.engine.runSimulation(request.body);
+    if (result.success) {
+      this.catalyst.recordEvent("simulation.completed", this.actor(request), `${result.scenario.interventionType} simulation completed for ${result.scenario.targetDistrict}.`);
+    }
+    response.json(result);
   }
 
   deployRecommendation(request: Request, response: Response) {
-    response.json(this.engine.updateRecommendation(request.params.id, "Deployed"));
+    const result = this.engine.updateRecommendation(request.params.id, "Deployed");
+    this.catalyst.recordEvent("recommendation.deployed", this.actor(request), `Recommendation ${request.params.id} deployed from command center.`);
+    response.json(result);
   }
 
   dismissRecommendation(request: Request, response: Response) {
-    response.json(this.engine.updateRecommendation(request.params.id, "Dismissed"));
+    const result = this.engine.updateRecommendation(request.params.id, "Dismissed");
+    this.catalyst.recordEvent("recommendation.dismissed", this.actor(request), `Recommendation ${request.params.id} dismissed after analyst review.`);
+    response.json(result);
   }
 
   readAlert(request: Request, response: Response) {
-    response.json(this.engine.markAlertRead(request.params.id));
+    const result = this.engine.markAlertRead(request.params.id);
+    this.catalyst.recordEvent("alert.read", this.actor(request), `Alert ${request.params.id} acknowledged.`);
+    response.json(result);
   }
 
   aiStatus(_request: Request, response: Response) {
@@ -85,6 +117,40 @@ export class IntelligenceController {
         hotspotPredictions: this.engine.getPredictions().hotspotPredictions.length
       }
     });
+  }
+
+  catalystServices(_request: Request, response: Response) {
+    response.json({
+      project: {
+        name: "Project-Rainfall",
+        pid: "44619000000013025",
+        deployment: "Catalyst AppSail",
+        url: "https://crimeverse-ai-50042732570.development.catalystappsail.in"
+      },
+      creditGuardrail: "Keep AppSail active; enable Data Store, Stratus, Auth, API Gateway and Signals with compact records before using paid QuickML/Zia workloads.",
+      services: this.catalyst.getServices()
+    });
+  }
+
+  catalystEvents(_request: Request, response: Response) {
+    response.json({ events: this.catalyst.getEvents() });
+  }
+
+  catalystSync(request: Request, response: Response) {
+    response.json({ success: true, snapshot: this.catalyst.syncSnapshot(this.engine.getState(), this.actor(request)) });
+  }
+
+  authMe(request: Request, response: Response) {
+    response.json(this.catalyst.getSession(request.headers.authorization) ?? { user: null, provider: "Catalyst Authentication", authenticated: false });
+  }
+
+  authLogin(request: Request, response: Response) {
+    const body = request.body as { email?: string };
+    response.json({ authenticated: true, ...this.catalyst.signIn(body.email) });
+  }
+
+  authLogout(request: Request, response: Response) {
+    response.json(this.catalyst.signOut(request.headers.authorization));
   }
 
   firProjection(_request: Request, response: Response) {

@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { CrimeverseAiEngine } from "../../ai/crimeverse-ai-engine";
+import { CatalystIntegration } from "../../catalyst/catalyst-integration";
 import { IntelligenceController } from "../controllers/intelligence.controller";
 
-export function createIntelligenceRouter(engine: CrimeverseAiEngine) {
-  const controller = new IntelligenceController(engine);
+export function createIntelligenceRouter(engine: CrimeverseAiEngine, catalyst: CatalystIntegration) {
+  const controller = new IntelligenceController(engine, catalyst);
   const router = Router();
 
   router.get("/metrics", controller.metrics.bind(controller));
@@ -32,6 +33,13 @@ export function createIntelligenceRouter(engine: CrimeverseAiEngine) {
   router.get("/analytics/features", controller.features.bind(controller));
   router.get("/analytics/anomalies", controller.anomalies.bind(controller));
   router.get("/graph/insights", controller.graphInsights.bind(controller));
+
+  router.get("/catalyst/services", controller.catalystServices.bind(controller));
+  router.get("/catalyst/events", controller.catalystEvents.bind(controller));
+  router.post("/catalyst/sync", controller.catalystSync.bind(controller));
+  router.get("/auth/me", controller.authMe.bind(controller));
+  router.post("/auth/login", controller.authLogin.bind(controller));
+  router.post("/auth/logout", controller.authLogout.bind(controller));
 
   return router;
 }

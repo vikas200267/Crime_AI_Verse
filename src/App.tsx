@@ -8,13 +8,17 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleUserRound,
+  Cloud,
   ClipboardList,
+  Database,
   FilePlus2,
   FileText,
   Filter,
   Gauge,
   LayoutDashboard,
   Loader2,
+  LogIn,
+  LogOut,
   MapPin,
   Network,
   Search,
@@ -98,6 +102,42 @@ type SearchResponse = {
   results?: SearchItem[];
 };
 
+type CatalystService = {
+  service: string;
+  capability: string;
+  state: "active" | "ready" | "prototype";
+  creditStrategy: string;
+};
+
+type CatalystStatus = {
+  project: { name: string; pid: string; deployment: string; url: string };
+  creditGuardrail: string;
+  services: CatalystService[];
+};
+
+type CatalystEvent = {
+  id: string;
+  type: string;
+  actor: string;
+  message: string;
+  createdAt: string;
+  delivery: string;
+};
+
+type CatalystSession = {
+  authenticated?: boolean;
+  token?: string;
+  user: null | {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    jurisdiction: string;
+  };
+  provider: string;
+  expiresAt?: string;
+};
+
 type EvidenceResponse = {
   success: boolean;
   error?: string;
@@ -105,6 +145,14 @@ type EvidenceResponse = {
   extraction: {
     confidence: number;
     modelSignals: string[];
+  };
+  catalyst?: {
+    evidenceObject: {
+      bucket: string;
+      objectKey: string;
+      provider: string;
+      mode: string;
+    };
   };
 };
 
@@ -297,6 +345,9 @@ export default function App() {
   const [predictions, setPredictions] = useState<Predictions | null>(null);
   const [anomalies, setAnomalies] = useState<AnomalySet | null>(null);
   const [graphInsights, setGraphInsights] = useState<GraphInsights | null>(null);
+  const [catalystStatus, setCatalystStatus] = useState<CatalystStatus | null>(null);
+  const [catalystEvents, setCatalystEvents] = useState<CatalystEvent[]>([]);
+  const [session, setSession] = useState<CatalystSession | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState("All Districts");
   const [selectedStation, setSelectedStation] = useState("All Police Stations");
   const [category, setCategory] = useState("All");
@@ -316,7 +367,7 @@ export default function App() {
 
   const refreshData = async () => {
     setError(null);
-    const [metricsData, incidentData, graphData, recData, alertData, statusData, predictionData, anomalyData, insightData] = await Promise.all([
+    const [metricsData, incidentData, graphData, recData, alertData, statusData, predictionData, anomalyData, insightData, catalystData, eventData] = await Promise.all([
       getJson<DistrictMetrics[]>("/api/metrics"),
       getJson<Incident[]>("/api/incidents"),
       getJson<{ nodes: EntityNode[]; edges: EntityEdge[] }>("/api/graph"),
@@ -325,7 +376,9 @@ export default function App() {
       getJson<AiStatus>("/api/ai/status"),
       getJson<Predictions>("/api/ai/predictions"),
       getJson<AnomalySet>("/api/ai/anomalies"),
-      getJson<GraphInsights>("/api/ai/graph-insights")
+      getJson<GraphInsights>("/api/ai/graph-insights"),
+      getJson<CatalystStatus>("/api/catalyst/services"),
+      getJson<{ events: CatalystEvent[] }>("/api/catalyst/events")
     ]);
     setDistricts(metricsData);
     setIncidents(incidentData);
@@ -336,6 +389,8 @@ export default function App() {
     setPredictions(predictionData);
     setAnomalies(anomalyData);
     setGraphInsights(insightData);
+    setCatalystStatus(catalystData);
+    setCatalystEvents(eventData.events);
     if (!selectedIncidentId && incidentData[0]) setSelectedIncidentId(incidentData[0].id);
   };
 
@@ -343,6 +398,17 @@ export default function App() {
     refreshData()
       .catch((err) => setError(err instanceof Error ? err.message : "Unable to load backend intelligence APIs."))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const token = window.localStorage.getItem("crimeverseCatalystToken");
+    if (!token) return;
+    fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.json())
+      .then((data: CatalystSession) => {
+        if (data.user) setSession({ ...data, token });
+      })
+      .catch(() => window.localStorage.removeItem("crimeverseCatalystToken"));
   }, []);
 
   useEffect(() => {
@@ -418,12 +484,17 @@ export default function App() {
       ]
     : [];
 
+  const authHeaders = (): Record<string, string> => {
+    const token = session?.token ?? window.localStorage.getItem("crimeverseCatalystToken");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const runEvidenceAnalysis = async () => {
     setBusyAction("analyze");
     try {
       const response = await fetch("/api/evidence/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ text: firText, filename: "manual-fir-entry.txt" })
       });
       if (!response.ok) throw new Error("Evidence analysis failed");
@@ -436,7 +507,7 @@ export default function App() {
       });
       setSelectedIncidentId(data.incident.id);
       setActiveModule("cases");
-      setActionMessage(`EvidenceFlow AI created ${data.incident.id} and refreshed graph, alerts, predictions, and recommendations.`);
+      setActionMessage(`EvidenceFlow AI created ${data.incident.id}; ${data.catalyst?.evidenceObject.provider ?? "Catalyst Stratus"} evidence metadata is ready.`);
       await refreshData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Evidence analysis failed");
@@ -450,7 +521,7 @@ export default function App() {
     try {
       const response = await fetch("/api/scenarios/run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           district: activeDistrict?.name ?? "Bengaluru Urban",
           interventionType: scenarioType,
@@ -472,7 +543,7 @@ export default function App() {
   const updateRecommendation = async (id: string, action: "deploy" | "dismiss") => {
     setBusyAction(`${action}-${id}`);
     try {
-      await fetch(`/api/recommendations/${id}/${action}`, { method: "POST" });
+      await fetch(`/api/recommendations/${id}/${action}`, { method: "POST", headers: authHeaders() });
       setActionMessage(`Recommendation ${action === "deploy" ? "deployed" : "dismissed"} and backend state refreshed.`);
       await refreshData();
     } finally {
@@ -481,7 +552,7 @@ export default function App() {
   };
 
   const markAlertRead = async (id: string) => {
-    await fetch(`/api/alerts/${id}/read`, { method: "POST" });
+    await fetch(`/api/alerts/${id}/read`, { method: "POST", headers: authHeaders() });
     setActionMessage("Alert marked as reviewed.");
     await refreshData();
   };
@@ -515,6 +586,55 @@ export default function App() {
     }
   };
 
+  const signInCatalyst = async () => {
+    setBusyAction("auth");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "dcp.admin@ksp.gov.in" })
+      });
+      if (!response.ok) throw new Error("Catalyst Authentication failed");
+      const data = (await response.json()) as CatalystSession;
+      if (data.token) window.localStorage.setItem("crimeverseCatalystToken", data.token);
+      setSession(data);
+      setActionMessage("Catalyst Authentication session active for DCP Admin.");
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Catalyst Authentication failed.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const signOutCatalyst = async () => {
+    setBusyAction("auth");
+    try {
+      await fetch("/api/auth/logout", { method: "POST", headers: authHeaders() });
+      window.localStorage.removeItem("crimeverseCatalystToken");
+      setSession(null);
+      setActionMessage("Catalyst Authentication session closed.");
+      await refreshData();
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const syncCatalyst = async () => {
+    setBusyAction("sync");
+    try {
+      const response = await fetch("/api/catalyst/sync", { method: "POST", headers: authHeaders() });
+      if (!response.ok) throw new Error("Catalyst sync failed");
+      const data = (await response.json()) as { snapshot: { cases: number; graphNodes: number } };
+      setActionMessage(`Catalyst Data Store/NoSQL sync prepared ${data.snapshot.cases} cases and ${data.snapshot.graphNodes} graph nodes.`);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Catalyst sync failed.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const categories = ["All", "Theft", "Assault", "Fraud", "Homicide", "Vandalism", "Narcotics", "Other"];
   const primaryRecommendation = recommendations.find((item) => item.status === "Pending") ?? recommendations[0];
   const latestAnomaly = anomalies?.anomalies[0] ?? null;
@@ -533,7 +653,7 @@ export default function App() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#f8fbff_0%,#edf4fb_44%,#f7fafc_100%)] text-[#07152f]">
       <header className="border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
-        <div className="grid gap-3 xl:grid-cols-[270px_1fr_280px] xl:items-center">
+        <div className="grid gap-3 xl:grid-cols-[270px_1fr_340px] xl:items-center">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-[#06295c] text-[#06295c]">
               <Shield className="h-6 w-6" />
@@ -556,15 +676,23 @@ export default function App() {
                 System Status
               </div>
               <div className={classNames("mt-1 text-xs font-semibold", error ? "text-red-600" : "text-emerald-600")}>
-                {error ? "Backend Attention Needed" : aiStatus?.mode ?? "Connected"}
+                {error ? "Backend Attention Needed" : catalystStatus?.project.deployment ?? aiStatus?.mode ?? "Connected"}
               </div>
             </div>
             <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
               <CircleUserRound className="h-8 w-8 text-[#07152f]" />
-              <div>
-                <div className="text-sm font-extrabold">DCP Admin</div>
-                <div className="text-xs text-slate-500">Bengaluru City</div>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-extrabold">{session?.user?.name ?? "DCP Admin"}</div>
+                <div className="truncate text-xs text-slate-500">{session?.user ? `${session.user.role} / ${session.user.jurisdiction}` : "Catalyst auth ready"}</div>
               </div>
+              <button
+                onClick={session?.user ? signOutCatalyst : signInCatalyst}
+                disabled={busyAction === "auth"}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#06295c] hover:bg-blue-50 disabled:opacity-60"
+                title={session?.user ? "Sign out" : "Sign in with Catalyst Authentication"}
+              >
+                {busyAction === "auth" ? <Loader2 className="h-4 w-4 animate-spin" /> : session?.user ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+              </button>
             </div>
           </div>
         </div>
@@ -1010,7 +1138,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : activeModule === "settings" ? (
-                  <div className="grid gap-3 2xl:grid-cols-2">
+                  <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_360px]">
                     <div className="rounded-lg border border-slate-200 p-4">
                       <h3 className="text-xs font-black uppercase text-[#063f9f]">System Controls</h3>
                       <button onClick={refreshIntelligence} disabled={busyAction === "refresh"} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60">
@@ -1021,12 +1149,55 @@ export default function App() {
                         {busyAction === "reset" && <Loader2 className="h-4 w-4 animate-spin" />}
                         Reset Digital Twin Demo State
                       </button>
+                      <button onClick={syncCatalyst} disabled={busyAction === "sync"} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 disabled:opacity-60">
+                        {busyAction === "sync" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+                        Sync to Catalyst Data Store / NoSQL
+                      </button>
                     </div>
                     <div className="rounded-lg border border-slate-200 p-4">
                       <h3 className="text-xs font-black uppercase text-[#063f9f]">Backend Connection</h3>
                       <p className="mt-2 text-sm font-semibold">{aiStatus?.service}</p>
                       <p className="text-xs font-medium text-slate-600">Official schema root: {aiStatus?.officialSchemaRoot}</p>
                       <StatusPill tone={error ? "red" : "green"}>{error ? "Attention" : "Operational"}</StatusPill>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-4 2xl:col-span-2">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-xs font-black uppercase text-[#063f9f]">Catalyst Services</h3>
+                          <p className="mt-1 text-xs font-semibold text-slate-600">{catalystStatus?.creditGuardrail}</p>
+                        </div>
+                        <StatusPill tone={session?.user ? "green" : "orange"}>{session?.user ? "Authenticated" : "Auth Ready"}</StatusPill>
+                      </div>
+                      <div className="mt-3 grid gap-2 md:grid-cols-2 2xl:grid-cols-4">
+                        {(catalystStatus?.services ?? []).map((service) => (
+                          <div key={service.service} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Cloud className="h-4 w-4 shrink-0 text-blue-600" />
+                                <span className="truncate text-xs font-black uppercase text-[#07152f]">{service.service}</span>
+                              </div>
+                              <StatusPill tone={service.state === "active" ? "green" : service.state === "ready" ? "blue" : "orange"}>{service.state}</StatusPill>
+                            </div>
+                            <p className="text-xs font-semibold text-slate-700">{service.capability}</p>
+                            <p className="mt-2 text-[11px] font-medium leading-4 text-slate-500">{service.creditStrategy}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-4 2xl:col-span-2">
+                      <h3 className="text-xs font-black uppercase text-[#063f9f]">Catalyst Signals / Audit Events</h3>
+                      <div className="mt-3 max-h-[240px] overflow-auto rounded-lg border border-slate-100">
+                        {(catalystEvents.length ? catalystEvents : [{ id: "empty", type: "system.ready", actor: "CrimeVerse AI", message: "Run an AI action to emit Catalyst-ready audit events.", createdAt: new Date().toISOString(), delivery: "In-memory event stream" }]).map((event) => (
+                          <div key={event.id} className="grid gap-1 border-b border-slate-100 p-3 text-xs md:grid-cols-[150px_1fr_150px]">
+                            <div className="font-black text-[#07152f]">{event.type}</div>
+                            <div>
+                              <div className="font-semibold">{event.message}</div>
+                              <div className="text-[11px] font-medium text-slate-500">{event.actor} / {event.delivery}</div>
+                            </div>
+                            <div className="font-medium text-slate-500">{new Date(event.createdAt).toLocaleString("en-IN")}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ) : (

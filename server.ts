@@ -3,10 +3,12 @@ import path from "node:path";
 import { CrimeverseAiEngine } from "./backend/ai/crimeverse-ai-engine";
 import { createBlueprintRouter } from "./backend/api/routes/blueprint.routes";
 import { createIntelligenceRouter } from "./backend/api/routes/intelligence.routes";
+import { CatalystIntegration } from "./backend/catalyst/catalyst-integration";
 
 const app = express();
 const port = Number(process.env.X_ZOHO_CATALYST_LISTEN_PORT ?? process.env.PORT ?? 8180);
 const intelligenceEngine = new CrimeverseAiEngine();
+const catalystIntegration = new CatalystIntegration();
 const projectRoot = process.cwd();
 const isProductionServer = process.env.NODE_ENV === "production" || (process.argv[1] ?? "").endsWith("server.cjs");
 
@@ -16,12 +18,13 @@ app.get("/api/health", (_request, response) => {
   response.json({
     status: "ok",
     service: "crimeverse-ai-backend-blueprint",
-    schemaSource: "Police_FIR_ER_Diagram.pdf"
+    schemaSource: "Police_FIR_ER_Diagram.pdf",
+    catalyst: "AppSail"
   });
 });
 
 app.use("/api/blueprint", createBlueprintRouter());
-app.use("/api", createIntelligenceRouter(intelligenceEngine));
+app.use("/api", createIntelligenceRouter(intelligenceEngine, catalystIntegration));
 
 app.get("/api", (_request, response) => {
   response.json({
