@@ -1,2168 +1,1037 @@
-import { useState, useEffect, useRef } from "react";
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
-import { 
-  Shield, 
-  FileText, 
-  Network, 
-  TrendingUp, 
-  Zap, 
-  Activity, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock, 
-  Compass, 
-  RefreshCw, 
-  Sliders, 
-  Bell, 
-  X, 
-  ArrowRight,
-  Sparkles,
-  Search,
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  BarChart3,
+  Bell,
+  BriefcaseBusiness,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  CircleUserRound,
+  ClipboardList,
+  FilePlus2,
+  FileText,
   Filter,
-  Info,
-  DollarSign,
-  Layers,
-  Maximize2,
-  Minimize2,
-  Map as MapIcon,
-  Download
+  Gauge,
+  LayoutDashboard,
+  Loader2,
+  MapPin,
+  Network,
+  Search,
+  Settings,
+  Shield,
+  ShieldCheck,
+  Siren,
+  SlidersHorizontal,
+  UsersRound
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
-import confetti from "canvas-confetti";
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
-import { 
-  Incident, 
-  EntityNode, 
-  EntityEdge, 
-  DistrictMetrics, 
-  SimulationScenario, 
-  ActionRecommendation, 
-  AlertNotification 
+import type { LucideIcon } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from "recharts";
+import type {
+  ActionRecommendation,
+  AlertNotification,
+  DistrictMetrics,
+  EntityEdge,
+  EntityNode,
+  Incident,
+  SimulationScenario
 } from "./types";
 
-// SAMPLE DOCUMENTS FOR EVIDENCEFLOW DEMONSTRATION
-const SAMPLE_DOCS = [
-  {
-    name: "FIR: Kalaburagi Clash (Timeline & Phone Link)",
-    text: `CRIME REPORT / FIR TRANSCRIPT
-Station: Kalaburagi Town Police Station
-Date of Report: 2026-07-08 | Time: 22:30
-Incident: Gang violence near Super Market Precinct.
+type ModuleKey = "dashboard" | "cases" | "analytics" | "graph" | "alerts" | "reports" | "settings" | "evidence" | "simulation";
+type ScenarioType = SimulationScenario["interventionType"];
+type ModuleCard = [ModuleKey, LucideIcon, string, string];
+type SummaryCard = [LucideIcon, string, number, string, "red" | "orange" | "blue" | "green"];
+type FooterMetric = [LucideIcon, string, string];
 
-Complainant states that on July 8 at 21:00, a violent clash erupted between two local rival factions, 'Kalaburagi Boys' and 'Saffron Gladiators', near the Super Market Area, Kalaburagi. Swords and wooden bats were brandished. Three police patrols were dispatched.
+type AiStatus = {
+  service: string;
+  mode: string;
+  officialSchemaRoot: string;
+  implementedCapabilities: string[];
+  counts: Record<string, number>;
+};
 
-We recovered a mobile phone belonging to suspect Suresh (7204123456), which contains active call logs linking him directly to Rahim (9845011223) at 20:45, exactly 15 minutes before the clash.
+type Predictions = {
+  hotspotPredictions: Array<{ district: string; area: string; riskScore: number; confidence: number; drivers: string[] }>;
+  districtRisk: Array<{ district: string; score: number; riskLevel: string; confidence: number; explanation: string[] }>;
+  repeatOffenderSignals: Array<{ person: string; score: number; confidence: number }>;
+};
 
-TIMELINE ANOMALY NOTES: Suspect Suresh claims he was in Bengaluru (350 miles away) at the time of the event, but his mobile number 7204123456 pinged the cell tower in Super Market Area, Kalaburagi at 21:02. Officer signature is verified, but witness signature block is missing.`
-  },
-  {
-    name: "Investigation Note: Koramangala Wire Fraud",
-    text: `DIGITAL CRIMES DIVISION NOTE
-Case Ref: FRAUD/KOR-99
-Date: 2026-07-05 | District: Bengaluru Urban
+type AnomalySet = {
+  count: number;
+  anomalies: Array<{ anomalyId: string; incidentId: string; district: string; severity: string; score: number; message: string }>;
+};
 
-We are investigating a Spear-Phishing corporate wire fraud against TVS Tech Solutions in Koramangala, Bengaluru. On July 5 at 11:30, CFO Ramesh Kumar received a spoofed email requesting an urgent wire of INR 45 Lakhs. 
+type GraphInsights = {
+  repeatOffenderCandidates: Array<{ name: string; caseCount: number; cases: string[]; districts: string[]; sharedPhones: string[] }>;
+  centrality: Array<{ node: EntityNode; degree: number }>;
+  sharedEntityLinks: Array<{ entityType: string; entity: string; cases: string[] }>;
+};
 
-The funds were wired to a shell bank account registered under 'Duniya Enterprises' in Kalaburagi. 
-IP trace logs show the phisher's terminal logged in from Kalaburagi, suggesting collaboration between Bengaluru phishing operators and Kalaburagi money launderers. No physical weapons or vehicles were used. Complainant TVS Tech Solutions has provided full email headers.`
-  },
-  {
-    name: "FIR Draft: Majestic Jewelry Robbery",
-    text: `DRAFT FIR (PENDING VALIDATION)
-District: Bengaluru Urban | Beat: Majestic Precinct
-Date of Incident: 2026-07-07 | Time: 19:15
+type SearchItem = {
+  type: string;
+  id: string;
+  title: string;
+  district?: string;
+  entityType?: string;
+  degree?: number;
+};
 
-Three masked suspects entered 'Venkateshwara Jewelers' near Majestic Bus Station. Complainant Venkatesh Rao (Shop Owner) states suspects held him at gunpoint using a country pistol. They stole approximately 2kg of gold ornaments.
+type SearchResponse = {
+  query: string;
+  total: number;
+  incidents?: SearchItem[];
+  graphEntities?: SearchItem[];
+  results?: SearchItem[];
+};
 
-Escape Vehicle: Black Pulsar Motorcycle with no visible registration plate.
-Suspect Rahim (9845011223) was identified by local informants running near the site.
+type EvidenceResponse = {
+  success: boolean;
+  error?: string;
+  incident: Incident;
+  extraction: {
+    confidence: number;
+    modelSignals: string[];
+  };
+};
 
-DISCREPANCY ALERT: Complainant states the robbery happened at 19:15. However, the arrest log shows suspect Rahim was detained in Koramangala at 19:00 (15 minutes prior, impossible speed and distance).`
-  }
-];
+const sampleFir = `District: Bengaluru Urban | Police Station: Majestic PS
+Date of Incident: 2026-07-07 | Time: 22:30
+An assault and robbery was reported near Majestic Market. Suspect Ramesh K and Suresh P attacked victim Mahesh B with a sharp weapon and escaped on motorcycle KA03MKS123. Mobile 9876543210 was found linked to another case. Witness statement is pending.`;
+
+const timeLabels = ["07 May", "08 May", "09 May", "10 May", "11 May", "12 May", "13 May"];
+const districtMapPositions: Record<string, { x: number; y: number }> = {
+  Kalaburagi: { x: 49, y: 19 },
+  Belagavi: { x: 27, y: 32 },
+  Dharwad: { x: 35, y: 40 },
+  Mangaluru: { x: 26, y: 75 },
+  Mysuru: { x: 52, y: 79 },
+  "Bengaluru Urban": { x: 67, y: 73 }
+};
+
+function classNames(...items: Array<string | false | undefined>) {
+  return items.filter(Boolean).join(" ");
+}
+
+async function getJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url} failed with ${response.status}`);
+  return response.json() as Promise<T>;
+}
+
+function SectionCard({ title, children, className = "", action }: { title?: string; children: ReactNode; className?: string; action?: ReactNode }) {
+  return (
+    <section className={classNames("rounded-xl border border-slate-200 bg-white p-3 shadow-sm", className)}>
+      {(title || action) && (
+        <div className="mb-2 flex items-center justify-between gap-3">
+          {title && <h2 className="text-xs font-extrabold uppercase text-[#063f9f]">{title}</h2>}
+          {action}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+function Sidebar({ active, setActive }: { active: ModuleKey; setActive: (module: ModuleKey) => void }) {
+  const items: Array<[ModuleKey, typeof LayoutDashboard, string]> = [
+    ["dashboard", LayoutDashboard, "Dashboard"],
+    ["cases", BriefcaseBusiness, "Cases"],
+    ["analytics", BarChart3, "Analytics"],
+    ["graph", Network, "Graph"],
+    ["alerts", Bell, "Alerts"],
+    ["reports", ClipboardList, "Reports"],
+    ["settings", Settings, "Settings"]
+  ];
+
+  return (
+    <aside className="sticky top-3 h-[calc(100vh-24px)] w-[72px] shrink-0 rounded-xl bg-[#06295c] p-2 text-white shadow-[0_16px_36px_rgba(6,41,92,0.28)]">
+      <nav className="flex h-full flex-col items-center gap-2">
+        {items.map(([key, Icon, label]) => (
+          <button
+            key={key}
+            onClick={() => setActive(key)}
+            className={classNames(
+              "flex h-[60px] w-full flex-col items-center justify-center gap-1 rounded-lg text-[10px] font-semibold transition",
+              active === key ? "bg-[#1877f2] shadow-lg shadow-blue-900/20" : "hover:bg-white/10"
+            )}
+            title={label}
+          >
+            <Icon className="h-5 w-5" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
+function KarnatakaMap({
+  districts,
+  selectedDistrict,
+  onSelectDistrict
+}: {
+  districts: DistrictMetrics[];
+  selectedDistrict: string;
+  onSelectDistrict: (district: string) => void;
+}) {
+  return (
+    <div className="relative min-h-[330px] overflow-hidden rounded-lg bg-[#fbfdff]">
+      <div className="absolute left-3 top-10 z-10 flex flex-col overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+        <button className="h-8 w-8 text-base font-semibold text-slate-700" title="Zoom in">+</button>
+        <button className="h-8 w-8 border-t border-slate-200 text-base font-semibold text-slate-700" title="Zoom out">−</button>
+      </div>
+
+      <svg viewBox="0 0 560 500" className="absolute inset-0 h-full w-full">
+        <defs>
+          <filter id="softGlow">
+            <feGaussianBlur stdDeviation="8" />
+          </filter>
+        </defs>
+        <path
+          d="M248 34 L305 53 L334 82 L325 126 L354 160 L340 205 L376 247 L360 292 L398 332 L376 381 L330 412 L292 468 L238 448 L206 398 L152 382 L134 334 L88 304 L112 250 L92 204 L124 162 L120 112 L166 88 L194 48 Z"
+          fill="#ffffff"
+          stroke="#9ca3af"
+          strokeWidth="2"
+        />
+        {[
+          "M194 48 L210 104 L166 142 L120 112",
+          "M210 104 L268 104 L305 53",
+          "M166 142 L226 168 L268 104",
+          "M226 168 L292 176 L325 126",
+          "M124 162 L182 214 L226 168",
+          "M182 214 L254 236 L292 176",
+          "M254 236 L326 244 L354 160",
+          "M112 250 L178 286 L182 214",
+          "M178 286 L250 310 L254 236",
+          "M250 310 L326 300 L326 244",
+          "M134 334 L204 356 L178 286",
+          "M204 356 L278 366 L250 310",
+          "M278 366 L360 292 L326 300",
+          "M206 398 L278 366 L292 468",
+          "M278 366 L330 412 L376 381"
+        ].map((d) => (
+          <path key={d} d={d} fill="none" stroke="#d1d5db" strokeWidth="1.3" />
+        ))}
+
+        {[
+          ["Bidar", 296, 83],
+          ["Kalaburagi", 274, 116],
+          ["Vijayapura", 188, 156],
+          ["Raichur", 325, 180],
+          ["Belagavi", 141, 204],
+          ["Dharwad", 176, 252],
+          ["Davanagere", 245, 284],
+          ["Shivamogga", 198, 323],
+          ["Tumakuru", 302, 354],
+          ["Bengaluru Rural", 356, 392],
+          ["Bengaluru Urban", 352, 420],
+          ["Mysuru", 256, 418]
+        ].map(([label, x, y]) => (
+          <text key={String(label)} x={Number(x)} y={Number(y)} className="fill-slate-700 text-[12px] font-bold">
+            {label}
+          </text>
+        ))}
+
+        {districts.map((district) => {
+          const pos = districtMapPositions[district.name] ?? { x: 45 + Math.random() * 12, y: 40 + Math.random() * 20 };
+          const color = district.riskLevel === "Critical" ? "#ef4444" : district.riskLevel === "High" ? "#f97316" : district.riskLevel === "Medium" ? "#fbbf24" : "#22c55e";
+          const radius = district.crimeIndex >= 80 ? 28 : district.crimeIndex >= 60 ? 22 : 17;
+          return (
+            <g key={district.name} onClick={() => onSelectDistrict(district.name)} className="cursor-pointer">
+              <circle cx={`${pos.x}%`} cy={`${pos.y}%`} r={radius} fill={color} opacity="0.16" filter="url(#softGlow)" />
+              <circle cx={`${pos.x}%`} cy={`${pos.y}%`} r={radius / 2} fill={color} opacity="0.25" />
+              <circle cx={`${pos.x}%`} cy={`${pos.y}%`} r={selectedDistrict === district.name ? 7 : 4} fill={color} stroke="#fff" strokeWidth="2" />
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className="absolute bottom-4 left-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="mb-2 text-[10px] font-extrabold uppercase text-[#06295c]">Hotspot Intensity</div>
+        <div className="h-2 w-28 rounded-full bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500" />
+        <div className="mt-1 flex justify-between text-[10px] font-semibold text-slate-600">
+          <span>Low</span>
+          <span>High</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ children, tone = "blue" }: { children: ReactNode; tone?: "blue" | "green" | "red" | "orange" | "slate" }) {
+  const styles = {
+    blue: "bg-blue-50 text-blue-700 border-blue-200",
+    green: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    red: "bg-red-50 text-red-700 border-red-200",
+    orange: "bg-orange-50 text-orange-700 border-orange-200",
+    slate: "bg-slate-50 text-slate-700 border-slate-200"
+  };
+  return <span className={classNames("rounded-full border px-2 py-1 text-[10px] font-black uppercase", styles[tone])}>{children}</span>;
+}
 
 export default function App() {
-  // STATE
+  const [activeModule, setActiveModule] = useState<ModuleKey>("dashboard");
   const [districts, setDistricts] = useState<DistrictMetrics[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [graph, setGraph] = useState<{ nodes: EntityNode[]; edges: EntityEdge[] }>({ nodes: [], edges: [] });
   const [recommendations, setRecommendations] = useState<ActionRecommendation[]>([]);
   const [alerts, setAlerts] = useState<AlertNotification[]>([]);
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("Bengaluru Urban");
-  const [compareMode, setCompareMode] = useState<boolean>(false);
-  const [compareDistrict, setCompareDistrict] = useState<string | null>(null);
-  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
-  const [hoveredDistrict, setHoveredDistrict] = useState<{ d: DistrictMetrics; cx: number; cy: number } | null>(null);
-  const [mapLayer, setMapLayer] = useState<'heatmap' | 'boundaries' | 'hotspots' | 'forecast'>('hotspots');
-  
-  // Tab State: 'dashboard' | 'evidenceflow' | 'knowledgegraph' | 'simulation'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'evidenceflow' | 'knowledgegraph' | 'simulation'>('dashboard');
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [predictions, setPredictions] = useState<Predictions | null>(null);
+  const [anomalies, setAnomalies] = useState<AnomalySet | null>(null);
+  const [graphInsights, setGraphInsights] = useState<GraphInsights | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState("All Districts");
+  const [category, setCategory] = useState("All");
+  const [timeRange, setTimeRange] = useState("30D");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string>("");
+  const [firText, setFirText] = useState(sampleFir);
+  const [analysisResult, setAnalysisResult] = useState<{ incident: Incident; confidence: number; modelSignals: string[] } | null>(null);
+  const [scenario, setScenario] = useState<SimulationScenario | null>(null);
+  const [scenarioType, setScenarioType] = useState<ScenarioType>("Patrol Reallocation");
+  const [loading, setLoading] = useState(true);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // EvidenceFlow UI State
-  const [docText, setDocText] = useState<string>(SAMPLE_DOCS[0].text);
-  const [analyzing, setAnalyzing] = useState<boolean>(false);
-  const [newlyAnalyzed, setNewlyAnalyzed] = useState<Incident | null>(null);
-
-  // Simulation UI State
-  const [simDistrict, setSimDistrict] = useState<string>("Bengaluru Urban");
-  const [simIntervention, setSimIntervention] = useState<'Patrol Reallocation' | 'Temporary Checkpoints' | 'Street Lighting' | 'Drone Surveillance' | 'Community Outreach'>("Patrol Reallocation");
-  const [simDetails, setSimDetails] = useState<string>("");
-  const [simulating, setSimulating] = useState<boolean>(false);
-  const [simResult, setSimResult] = useState<SimulationScenario | null>(null);
-
-  // Knowledge Graph Filter
-  const [graphFilter, setGraphFilter] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedNode, setSelectedNode] = useState<EntityNode | null>(null);
-
-  // API Key Warning State
-  const [apiConfigured, setApiConfigured] = useState<boolean>(true);
-
-  // Digital Clock State
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Map Pan/Zoom State
-  const [mapZoom, setMapZoom] = useState<number>(1);
-  const [mapPan, setMapPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isDraggingMap, setIsDraggingMap] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
-  const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
-  const [activeRiskFilters, setActiveRiskFilters] = useState<string[]>(['Critical', 'High', 'Medium', 'Low']);
-  const [activeIncidentFilters, setActiveIncidentFilters] = useState<string[]>(['Theft', 'Assault', 'Fraud', 'Homicide', 'Vandalism', 'Narcotics', 'Other']);
-  const mapWrapperRef = useRef<HTMLDivElement>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    const el = mapWrapperRef.current;
-    if (!el) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const scaleAdjust = e.deltaY > 0 ? 0.9 : 1.1;
-      setMapZoom((prev) => Math.min(Math.max(0.5, prev * scaleAdjust), 5));
-    };
-
-    el.addEventListener("wheel", handleWheel, { passive: false });
-    return () => el.removeEventListener("wheel", handleWheel);
-  }, []);
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    setIsDraggingMap(true);
-    setDragStart({ x: e.clientX - mapPan.x, y: e.clientY - mapPan.y });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDraggingMap || !dragStart) return;
-    setMapPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
-  };
-
-  const handleMouseUp = () => {
-    setIsDraggingMap(false);
-    setDragStart(null);
-  };
-
-  // FETCH DATA ON MOUNT
-  const fetchData = async () => {
-    try {
-      const metricsRes = await fetch("/api/metrics");
-      const dData = await metricsRes.json();
-      setDistricts(dData);
-
-      const incsRes = await fetch("/api/incidents");
-      const iData = await incsRes.json();
-      setIncidents(iData);
-      if (iData.length > 0) setSelectedIncident(iData[0]);
-
-      const graphRes = await fetch("/api/graph");
-      const gData = await graphRes.json();
-      setGraph(gData);
-
-      const recsRes = await fetch("/api/recommendations");
-      const rData = await recsRes.json();
-      setRecommendations(rData);
-
-      const alertsRes = await fetch("/api/alerts");
-      const aData = await alertsRes.json();
-      setAlerts(aData);
-    } catch (err) {
-      console.error("Error fetching state:", err);
-    }
+  const refreshData = async () => {
+    setError(null);
+    const [metricsData, incidentData, graphData, recData, alertData, statusData, predictionData, anomalyData, insightData] = await Promise.all([
+      getJson<DistrictMetrics[]>("/api/metrics"),
+      getJson<Incident[]>("/api/incidents"),
+      getJson<{ nodes: EntityNode[]; edges: EntityEdge[] }>("/api/graph"),
+      getJson<ActionRecommendation[]>("/api/recommendations"),
+      getJson<AlertNotification[]>("/api/alerts"),
+      getJson<AiStatus>("/api/ai/status"),
+      getJson<Predictions>("/api/ai/predictions"),
+      getJson<AnomalySet>("/api/ai/anomalies"),
+      getJson<GraphInsights>("/api/ai/graph-insights")
+    ]);
+    setDistricts(metricsData);
+    setIncidents(incidentData);
+    setGraph(graphData);
+    setRecommendations(recData);
+    setAlerts(alertData);
+    setAiStatus(statusData);
+    setPredictions(predictionData);
+    setAnomalies(anomalyData);
+    setGraphInsights(insightData);
+    if (!selectedIncidentId && incidentData[0]) setSelectedIncidentId(incidentData[0].id);
   };
 
   useEffect(() => {
-    fetchData();
-    // Quick test if API key is in environment variables (warning banner)
-    // The server will print if key is missing, we can assume true/false based on server response flags or mock
-    setApiConfigured(true); // Default configured; fallback mode handles gracefully
+    refreshData()
+      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load backend intelligence APIs."))
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleReset = async () => {
-    if (confirm("Are you sure you want to reset the Digital Twin state to default?")) {
-      const res = await fetch("/api/reset", { method: "POST" });
-      if (res.ok) {
-        fetchData();
-        setNewlyAnalyzed(null);
-        setSimResult(null);
-        setSelectedNode(null);
-        confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (!searchQuery.trim()) {
+        setSearchResults([]);
+        return;
       }
-    }
-  };
+      getJson<SearchResponse>(`/api/search?q=${encodeURIComponent(searchQuery)}`)
+        .then((data) => setSearchResults(data.results ?? [...(data.incidents ?? []), ...(data.graphEntities ?? [])]))
+        .catch(() => setSearchResults([]));
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [searchQuery]);
 
-  // Analyze Unstructured Document
-  const handleAnalyze = async () => {
-    if (!docText.trim()) return;
-    setAnalyzing(true);
-    setNewlyAnalyzed(null);
+  const districtNames = useMemo(() => ["All Districts", ...districts.map((item) => item.name)], [districts]);
+  const stationNames = useMemo(() => ["All Police Stations", ...new Set(incidents.map((incident) => `${incident.location.area} PS`))], [incidents]);
+  const selectedIncident = incidents.find((incident) => incident.id === selectedIncidentId) ?? analysisResult?.incident ?? incidents[0];
+  const activeDistrict = selectedDistrict === "All Districts" ? districts[0] : districts.find((district) => district.name === selectedDistrict) ?? districts[0];
+
+  const filteredIncidents = incidents.filter((incident) => {
+    const districtMatch = selectedDistrict === "All Districts" || incident.location.district === selectedDistrict;
+    const categoryMatch = category === "All" || incident.category === category;
+    const query = searchQuery.trim().toLowerCase();
+    const queryMatch =
+      !query ||
+      [incident.id, incident.title, incident.location.district, incident.location.area, incident.category, ...incident.extractedEntities.suspects, ...incident.extractedEntities.victims]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    return districtMatch && categoryMatch && queryMatch;
+  });
+
+  const trendData = timeLabels.map((day, index) => ({
+    day,
+    theft: 40 + incidents.filter((item) => item.category === "Theft").length * 18 + index * 4 + (index % 2 ? 12 : 0),
+    assault: 32 + incidents.filter((item) => item.category === "Assault").length * 18 + index * 3,
+    cyber: 18 + incidents.filter((item) => item.category === "Fraud").length * 14 + (index % 3) * 4,
+    robbery: 20 + filteredIncidents.length * 7 + index * 2,
+    others: 12 + incidents.filter((item) => !["Theft", "Assault", "Fraud"].includes(item.category)).length * 8 + index
+  }));
+
+  const zoneData = districts.map((district) => ({
+    zone: district.name.replace("Bengaluru ", "BLR "),
+    current: district.crimeIndex + district.crimeCount * 40,
+    previous: Math.max(20, district.crimeIndex + district.crimeCount * 25 - 24)
+  }));
+
+  const evidenceItems = selectedIncident
+    ? [
+        ["FIR Details", true],
+        ["Victim Details", selectedIncident.extractedEntities.victims.length > 0],
+        ["Accused Details", selectedIncident.extractedEntities.suspects.length > 0],
+        ["Evidence Info", selectedIncident.extractedEntities.weapons.length + selectedIncident.extractedEntities.vehicles.length > 0],
+        ["Witness Statements", selectedIncident.validationAlerts.length === 0]
+      ]
+    : [];
+
+  const runEvidenceAnalysis = async () => {
+    setBusyAction("analyze");
     try {
-      const res = await fetch("/api/evidence/analyze", {
+      const response = await fetch("/api/evidence/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: docText, filename: "EvidenceFlow_Ingested_Doc.txt" })
+        body: JSON.stringify({ text: firText, filename: "manual-fir-entry.txt" })
       });
-      const data = await res.json();
-      if (data.success) {
-        setIncidents(data.incident ? [data.incident, ...incidents] : incidents);
-        setGraph(data.graph);
-        setRecommendations(data.recommendations);
-        setDistricts(data.districts);
-        setAlerts(data.alerts);
-        setNewlyAnalyzed(data.incident);
-        setSelectedIncident(data.incident);
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      } else {
-        alert("Parser error: " + (data.error || "failed"));
-      }
+      if (!response.ok) throw new Error("Evidence analysis failed");
+      const data = (await response.json()) as EvidenceResponse;
+      if (!data.success) throw new Error(data.error ?? "Evidence analysis failed");
+      setAnalysisResult({
+        incident: data.incident,
+        confidence: data.extraction.confidence,
+        modelSignals: data.extraction.modelSignals
+      });
+      setSelectedIncidentId(data.incident.id);
+      await refreshData();
     } catch (err) {
-      console.error(err);
-      alert("Network or API timeout during heavy analysis.");
+      setError(err instanceof Error ? err.message : "Evidence analysis failed");
     } finally {
-      setAnalyzing(false);
+      setBusyAction(null);
     }
   };
 
-  const handleDownloadGraphData = () => {
-    const dataStr = JSON.stringify(graph, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = 'knowledge_graph_data.json';
-
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-  };
-
-  // Run Simulation
-  const handleRunSimulation = async () => {
-    setSimulating(true);
-    setSimResult(null);
+  const runScenario = async () => {
+    setBusyAction("scenario");
     try {
-      const res = await fetch("/api/scenarios/run", {
+      const response = await fetch("/api/scenarios/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          district: simDistrict,
-          interventionType: simIntervention,
-          description: simDetails
+          district: activeDistrict?.name ?? "Bengaluru Urban",
+          interventionType: scenarioType,
+          description: `Command center simulation from ${timeRange} risk window.`
         })
       });
-      const data = await res.json();
-      if (data.success) {
-        setSimResult(data.scenario);
-        confetti({ particleCount: 80, spread: 50, colors: ['#06b6d4', '#eab308'] });
-      } else {
-        alert("Simulation error: " + (data.error || "failed"));
-      }
+      if (!response.ok) throw new Error("Scenario simulation failed");
+      const data = (await response.json()) as { success: boolean; scenario: SimulationScenario };
+      setScenario(data.scenario);
+      await refreshData();
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : "Scenario simulation failed");
     } finally {
-      setSimulating(false);
+      setBusyAction(null);
     }
   };
 
-  // Deploy recommendation action
-  const handleDeployAction = async (id: string) => {
+  const updateRecommendation = async (id: string, action: "deploy" | "dismiss") => {
+    setBusyAction(`${action}-${id}`);
     try {
-      const res = await fetch(`/api/recommendations/${id}/deploy`, { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        setRecommendations(data.recommendations);
-        setDistricts(data.districts);
-        setAlerts(data.alerts);
-        confetti({ particleCount: 150, spread: 80, origin: { x: 0.8, y: 0.4 } });
-      }
-    } catch (err) {
-      console.error(err);
+      await fetch(`/api/recommendations/${id}/${action}`, { method: "POST" });
+      await refreshData();
+    } finally {
+      setBusyAction(null);
     }
   };
 
-  // Dismiss recommendation
-  const handleDismissAction = async (id: string) => {
+  const markAlertRead = async (id: string) => {
+    await fetch(`/api/alerts/${id}/read`, { method: "POST" });
+    await refreshData();
+  };
+
+  const resetTwin = async () => {
+    setBusyAction("reset");
     try {
-      const res = await fetch(`/api/recommendations/${id}/dismiss`, { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        setRecommendations(data.recommendations);
-      }
-    } catch (err) {
-      console.error(err);
+      await fetch("/api/reset", { method: "POST" });
+      setAnalysisResult(null);
+      setScenario(null);
+      await refreshData();
+    } finally {
+      setBusyAction(null);
     }
   };
 
-  // Read alert
-  const handleReadAlert = async (id: string) => {
-    try {
-      const res = await fetch(`/api/alerts/${id}/read`, { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        setAlerts(data.alerts);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Helper Coordinates Mapper for karnataka SVG
-  // Lat range roughly: 11.5 (South) to 18.5 (North)
-  // Lng range roughly: 74.0 (West) to 78.5 (East)
-  const mapCoordsToSvg = (lat: number, lng: number): { cx: number; cy: number } => {
-    const minLat = 11.2;
-    const maxLat = 18.6;
-    const minLng = 73.8;
-    const maxLng = 78.8;
-
-    const width = 440;
-    const height = 480;
-
-    const cx = ((lng - minLng) / (maxLng - minLng)) * width + 30;
-    const cy = height - ((lat - minLat) / (maxLat - minLat)) * height + 10;
-    return { cx, cy };
-  };
-
-  // SVG representation of Karnataka Districts border contours (abstract simplified representation)
-  // To keep visual high-fidelity and lightweight, we use simplified lines for Karnataka Map
-  const activeDistrictMetrics = districts.find(d => d.name === selectedDistrict);
-
-  // FILTERED NODES AND EDGES FOR KNOWLEDGE GRAPH
-  const filteredNodes = graph.nodes?.filter(node => {
-    const matchesFilter = graphFilter === "all" || node.type === graphFilter;
-    const matchesSearch = searchQuery === "" || node.label.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
-  }) || [];
-
-  const filteredEdges = graph.edges?.filter(edge => {
-    // Only show edges where both source and target exist in filteredNodes
-    const sourceExists = filteredNodes.some(n => n.id === edge.source);
-    const targetExists = filteredNodes.some(n => n.id === edge.target);
-    return sourceExists && targetExists;
-  }) || [];
+  const categories = ["All", "Theft", "Assault", "Fraud", "Homicide", "Vandalism", "Narcotics", "Other"];
+  const primaryRecommendation = recommendations.find((item) => item.status === "Pending") ?? recommendations[0];
+  const latestAnomaly = anomalies?.anomalies[0] ?? null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-transparent text-slate-100 font-sans selection:bg-cyan-500/30 select-none relative z-0">
-      {/* Dynamic Background Effect */}
-      <div className="fixed inset-0 bg-[#020617] pointer-events-none z-[-2]" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-900/20 via-[#020617]/80 to-[#020617] pointer-events-none z-[-1]" />
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none z-[-1]" />
-
-      {/* HEADER SECTION */}
-      <header className="border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 px-4 py-3 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-cyan-500 to-indigo-500 rounded-lg text-slate-950 flex items-center justify-center shadow-lg shadow-cyan-500/10">
-            <Shield className="w-6 h-6 stroke-[2]" id="app-logo-shield" />
+    <main className="min-h-screen overflow-x-hidden bg-[#f5f8fc] text-[#07152f]">
+      <header className="border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="grid gap-3 xl:grid-cols-[270px_1fr_280px] xl:items-center">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-[#06295c] text-[#06295c]">
+              <Shield className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-lg font-black tracking-normal text-[#07152f]">EVIDENCEFLOW AI</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-[#06295c]">Karnataka Police</div>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-display font-bold tracking-tight text-white flex items-center gap-2">
-              CRIMEVERSE AI <span className="text-xs px-2 py-0.5 bg-cyan-950 text-cyan-400 border border-cyan-800 rounded-full font-mono font-medium tracking-widest uppercase">Digital Twin</span>
+          <div className="text-left xl:text-center">
+            <h1 className="text-xl font-black leading-tight tracking-normal text-[#07152f] md:text-2xl">
+              EvidenceFlow AI — Crime Intelligence Command Center
             </h1>
-            <p className="text-xs text-slate-400 font-mono flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-              STATEWIDE CRIME INTELLIGENCE COMMAND CENTER
-            </p>
+            <p className="text-sm font-medium text-[#07152f] md:text-base">From Data to Decision. From Intelligence to Impact.</p>
           </div>
-        </div>
-
-        {/* TOP METRICS / STATUS */}
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* DIGITAL CLOCK WIDGET (IST) */}
-          <div className="flex flex-col items-end justify-center bg-slate-900/60 border border-slate-800 px-3 py-1 rounded-md font-mono text-right">
-            <div className="text-cyan-400 font-bold text-sm tracking-widest">
-              {currentTime.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }).toUpperCase()} IST
+          <div className="flex items-center justify-between gap-4 xl:justify-end">
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase text-[#07152f]">
+                <span className={classNames("h-3 w-3 rounded-full", error ? "bg-red-500" : "bg-emerald-500")} />
+                System Status
+              </div>
+              <div className={classNames("mt-1 text-xs font-semibold", error ? "text-red-600" : "text-emerald-600")}>
+                {error ? "Backend Attention Needed" : aiStatus?.mode ?? "Connected"}
+              </div>
             </div>
-            <div className="text-slate-500 text-[10px] tracking-widest uppercase">
-              {currentTime.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}
+            <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+              <CircleUserRound className="h-8 w-8 text-[#07152f]" />
+              <div>
+                <div className="text-sm font-extrabold">DCP Admin</div>
+                <div className="text-xs text-slate-500">Bengaluru City</div>
+              </div>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 text-xs bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-md font-mono h-10">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>SYSTEM STATUS: <strong className="text-emerald-400">SYNCHRONIZED</strong></span>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-md font-mono h-10">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>GEMINI ENGINE: <strong className="text-cyan-400">ONLINE (3.5-FLASH)</strong></span>
-          </div>
-
-          <button 
-            onClick={handleReset}
-            className="flex items-center gap-1.5 text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 px-3 py-1.5 rounded-md border border-slate-800 transition font-mono"
-            title="Reset to default seed data"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            RESET STATE
-          </button>
         </div>
       </header>
 
-      {/* WARNING BANNER FOR MISSING API KEY (GENTLE AND REASSURING) */}
-      {!apiConfigured && (
-        <div className="bg-amber-950/40 border-b border-amber-900/60 text-amber-300 px-4 py-2 text-xs font-mono flex items-center gap-2 justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            <span><strong>GEMINI KEY NOT DETECTED:</strong> Running in local rule-based simulation. Configure your <strong>GEMINI_API_KEY</strong> in <strong>Settings &gt; Secrets</strong> to unlock full LLM semantic parsing, real-time validations, and generative predictions.</span>
+      <div className="px-3 py-3 lg:px-4">
+        <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(280px,1fr)_180px_200px_220px_110px]">
+          <div className="relative flex h-10 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 shadow-sm">
+            <Search className="h-5 w-5 text-slate-500" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-slate-400"
+              placeholder="Search FIR No., district, police station, suspect..."
+            />
+            {searchResults.length > 0 && (
+              <div className="absolute left-0 right-0 top-11 z-30 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white p-2 shadow-xl">
+                {searchResults.slice(0, 6).map((result) => (
+                  <button
+                    key={String(result.id)}
+                    onClick={() => {
+                      if (result.type === "case") {
+                        setSelectedIncidentId(result.id);
+                        setActiveModule("cases");
+                      } else {
+                        setActiveModule("graph");
+                      }
+                      setSearchQuery(result.title);
+                    }}
+                    className="block w-full rounded-md px-3 py-2 text-left text-xs hover:bg-blue-50"
+                  >
+                    <b>{result.title}</b>
+                    <span className="ml-2 text-slate-500">{result.district ?? result.entityType ?? ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <button onClick={() => setApiConfigured(true)} className="text-amber-500 hover:text-amber-400">
-            <X className="w-4 h-4" />
+
+          <label className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold shadow-sm">
+            <select value={selectedDistrict} onChange={(event) => setSelectedDistrict(event.target.value)} className="w-full bg-transparent outline-none">
+              {districtNames.map((name) => (
+                <option key={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold shadow-sm">
+            <select className="w-full bg-transparent outline-none">
+              {stationNames.map((name) => (
+                <option key={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+
+          <button className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold shadow-sm">
+            <CalendarDays className="h-4 w-4" />
+            {timeRange} Intelligence Window
+            <ChevronDown className="h-4 w-4" />
+          </button>
+
+          <button onClick={() => setActiveModule("analytics")} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold shadow-sm">
+            <Filter className="h-4 w-4" />
+            Filters
           </button>
         </div>
-      )}
 
-      {/* MAIN CONTAINER */}
-      <main className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-5 p-4 lg:p-5 max-w-[1700px] w-full mx-auto">
-        
-        {/* LEFT COLUMN: NAVIGATION & INTERACTIVE TOOLS (4 COLS ON LARGE) */}
-        <section className="xl:col-span-3 flex flex-col gap-4">
-          
-          {/* NAVIGATION BAR */}
-          <div className="bg-[#050914]/80 backdrop-blur-md border border-slate-800/80 rounded-2xl p-3 flex flex-col gap-1.5 relative overflow-hidden shadow-xl shadow-black/50">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-2xl rounded-full pointer-events-none"></div>
-            
-            <div className="flex items-center gap-2 px-3 py-2 mb-1">
-               <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]"></div>
-               <p className="text-[10px] font-mono tracking-widest uppercase text-cyan-400/80 font-bold">System Modules</p>
-            </div>
-            
-            <button 
-              onClick={() => setActiveTab('dashboard')}
-              className={`group flex items-center justify-between px-4 py-3.5 rounded-xl text-sm transition-all duration-300 font-medium ${activeTab === 'dashboard' ? 'bg-gradient-to-r from-cyan-900/60 to-cyan-900/10 border border-cyan-500/30 text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.2)] scale-[1.02]' : 'text-slate-400 border border-transparent hover:border-slate-700/50 hover:bg-slate-800/40 hover:text-slate-200 hover:scale-[1.01]'}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`p-1.5 rounded-lg transition-colors ${activeTab === 'dashboard' ? 'bg-cyan-500/20' : 'bg-slate-800/50 group-hover:bg-slate-700'}`}>
-                  <Compass className={`w-4 h-4 stroke-[2] transition-transform duration-300 ${activeTab === 'dashboard' ? 'rotate-12 text-cyan-400' : 'group-hover:rotate-12 text-slate-400 group-hover:text-cyan-300'}`} />
-                </div>
-                <span>Statewide Digital Twin</span>
-              </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded font-mono border transition-colors ${activeTab === 'dashboard' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-900 text-slate-500 border-slate-800 group-hover:border-slate-700'}`}>MAP</span>
-            </button>
+        {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
 
-            <button 
-              onClick={() => setActiveTab('evidenceflow')}
-              className={`group flex items-center justify-between px-4 py-3.5 rounded-xl text-sm transition-all duration-300 font-medium ${activeTab === 'evidenceflow' ? 'bg-gradient-to-r from-cyan-900/60 to-cyan-900/10 border border-cyan-500/30 text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.2)] scale-[1.02]' : 'text-slate-400 border border-transparent hover:border-slate-700/50 hover:bg-slate-800/40 hover:text-slate-200 hover:scale-[1.01]'}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`p-1.5 rounded-lg transition-colors ${activeTab === 'evidenceflow' ? 'bg-cyan-500/20' : 'bg-slate-800/50 group-hover:bg-slate-700'}`}>
-                  <FileText className={`w-4 h-4 stroke-[2] transition-transform duration-300 ${activeTab === 'evidenceflow' ? '-translate-y-0.5 text-cyan-400' : 'group-hover:-translate-y-0.5 text-slate-400 group-hover:text-cyan-300'}`} />
-                </div>
-                <span>EvidenceFlow AI</span>
-              </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded font-mono border transition-colors ${activeTab === 'evidenceflow' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-900 text-slate-500 border-slate-800 group-hover:border-slate-700'}`}>INGEST</span>
-            </button>
+        <div className="flex gap-3">
+          <Sidebar active={activeModule} setActive={setActiveModule} />
 
-            <button 
-              onClick={() => setActiveTab('knowledgegraph')}
-              className={`group flex items-center justify-between px-4 py-3.5 rounded-xl text-sm transition-all duration-300 font-medium ${activeTab === 'knowledgegraph' ? 'bg-gradient-to-r from-cyan-900/60 to-cyan-900/10 border border-cyan-500/30 text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.2)] scale-[1.02]' : 'text-slate-400 border border-transparent hover:border-slate-700/50 hover:bg-slate-800/40 hover:text-slate-200 hover:scale-[1.01]'}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`p-1.5 rounded-lg transition-colors ${activeTab === 'knowledgegraph' ? 'bg-cyan-500/20' : 'bg-slate-800/50 group-hover:bg-slate-700'}`}>
-                  <Network className={`w-4 h-4 stroke-[2] transition-transform duration-300 ${activeTab === 'knowledgegraph' ? 'scale-110 text-cyan-400' : 'group-hover:scale-110 text-slate-400 group-hover:text-cyan-300'}`} />
-                </div>
-                <span>Crime Knowledge Graph</span>
-              </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded font-mono border transition-colors ${activeTab === 'knowledgegraph' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-900 text-slate-500 border-slate-800 group-hover:border-slate-700'}`}>LINKED</span>
-            </button>
-
-            <button 
-              onClick={() => setActiveTab('simulation')}
-              className={`group flex items-center justify-between px-4 py-3.5 rounded-xl text-sm transition-all duration-300 font-medium ${activeTab === 'simulation' ? 'bg-gradient-to-r from-amber-900/60 to-amber-900/10 border border-amber-500/30 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.15)] scale-[1.02]' : 'text-slate-400 border border-transparent hover:border-slate-700/50 hover:bg-slate-800/40 hover:text-slate-200 hover:scale-[1.01]'}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`p-1.5 rounded-lg transition-colors ${activeTab === 'simulation' ? 'bg-amber-500/20' : 'bg-slate-800/50 group-hover:bg-slate-700'}`}>
-                  <Sliders className={`w-4 h-4 stroke-[2] transition-transform duration-300 ${activeTab === 'simulation' ? 'rotate-90 text-amber-400' : 'group-hover:rotate-90 text-slate-400 group-hover:text-amber-300'}`} />
-                </div>
-                <span>Simulation Engine</span>
-              </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded font-mono border transition-colors ${activeTab === 'simulation' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-900 text-slate-500 border-slate-800 group-hover:border-slate-700'}`}>PREDICT</span>
-            </button>
-          </div>
-
-          {/* ACTIVE RECOMMENDED ACTIONS */}
-          <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col gap-3.5">
-            <div className="flex items-center justify-between border-b border-slate-900 pb-2.5">
-              <h2 className="text-xs font-mono font-semibold tracking-widest uppercase text-slate-400 flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-yellow-400" />
-                Action Recommendations
-              </h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-900 rounded-full border border-slate-800 text-slate-400">
-                {recommendations.filter(r => r.status === "Pending").length}
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-3 overflow-y-auto max-h-[300px]">
-              {recommendations.filter(r => r.status === "Pending").length === 0 ? (
-                <div className="text-center py-6 text-xs text-slate-500 font-mono">
-                  No pending recommendations. All actions deployed!
-                </div>
-              ) : (
-                recommendations.filter(r => r.status === "Pending").map((rec, idx) => (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.1 }}
-                    key={rec.id} 
-                    className="bg-slate-900/60 border border-slate-800 hover:border-slate-700 rounded-lg p-3 flex flex-col gap-2.5 relative overflow-hidden"
-                  >
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-yellow-500/5 to-transparent pointer-events-none"></div>
-                    <div className="flex justify-between items-start">
-                      <span className="text-[9px] font-mono bg-yellow-950/60 text-yellow-400 border border-yellow-800/30 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                        {rec.district}
+          <div className="grid min-w-0 flex-1 gap-3 2xl:grid-cols-[300px_minmax(560px,1fr)_390px]">
+            <div className="space-y-3">
+              <SectionCard title="Command Center Modules">
+                <div className="grid gap-2">
+                  {([
+                    ["dashboard", Gauge, "Statewide Digital Twin", "Real-time spatial view of crime incidents and police assets."],
+                    ["evidence", Network, "EvidenceFlow AI", "Analyze FIRs, charge sheets and case documents."],
+                    ["graph", UsersRound, "Crime Knowledge Graph", "Discover entities, patterns and recurring networks."],
+                    ["simulation", SlidersHorizontal, "Simulation Engine", "What-if analysis for deployment and patrol planning."]
+                  ] satisfies ModuleCard[]).map(([key, Icon, title, body]) => (
+                    <button
+                      key={String(key)}
+                      onClick={() => setActiveModule(key as ModuleKey)}
+                      className={classNames(
+                        "flex min-h-[76px] items-center gap-3 rounded-lg border p-3 text-left",
+                        activeModule === key ? "border-blue-300 bg-blue-50/80" : "border-slate-200 bg-white hover:bg-slate-50"
+                      )}
+                    >
+                      <Icon className="h-9 w-9 shrink-0 text-[#063f9f]" />
+                      <span>
+                        <span className="block text-xs font-black uppercase text-[#06295c]">{title}</span>
+                        <span className="mt-1 block text-[11px] font-medium leading-4 text-slate-700">{body}</span>
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-cyan-400" />
-                        {rec.actionWindow}
+                    </button>
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Alert Summary" action={<button onClick={() => setActiveModule("alerts")} className="text-xs font-semibold text-[#06295c]">View All</button>}>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    [Siren, "High Risk Alerts", alerts.filter((item) => item.severity === "Critical").length, "Critical", "red"],
+                    [AlertTriangle, "Anomalies", anomalies?.count ?? 0, "AI detected", "orange"],
+                    [FilePlus2, "Cases", incidents.length, "Analyzed", "blue"],
+                    [ShieldCheck, "Active", recommendations.filter((item) => item.status === "Pending").length, "Pending actions", "green"]
+                  ] satisfies SummaryCard[]).map(([Icon, label, value, meta, color]) => (
+                    <button
+                      key={String(label)}
+                      onClick={() => setActiveModule(label === "Anomalies" ? "analytics" : label === "Cases" ? "cases" : "alerts")}
+                      className={classNames(
+                        "rounded-lg border p-3 text-left",
+                        color === "red" && "border-red-200 bg-red-50",
+                        color === "orange" && "border-orange-200 bg-orange-50",
+                        color === "green" && "border-emerald-200 bg-emerald-50",
+                        color === "blue" && "border-blue-200 bg-blue-50"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className={classNames("h-5 w-5", color === "red" && "text-red-500", color === "orange" && "text-orange-500", color === "green" && "text-emerald-600", color === "blue" && "text-blue-600")} />
+                        <div className="text-[9px] font-black uppercase text-[#063f9f]">{label}</div>
+                      </div>
+                      <div className="mt-1 text-xl font-black">{String(value)}</div>
+                      <div className="text-[11px] font-semibold text-slate-600">{String(meta)}</div>
+                    </button>
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Live Alerts Feed">
+                <div className="max-h-[220px] space-y-2 overflow-auto pr-1">
+                  {alerts.map((alert) => (
+                    <button key={alert.id} onClick={() => markAlertRead(alert.id)} className="flex w-full items-start gap-2 rounded-lg border border-slate-100 p-2 text-left hover:bg-slate-50">
+                      <AlertTriangle className={classNames("mt-0.5 h-4 w-4 shrink-0", alert.severity === "Critical" ? "text-red-500" : "text-orange-500")} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-bold">{alert.message}</span>
+                        <span className="text-[10px] font-semibold text-slate-500">{alert.district}</span>
                       </span>
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-semibold text-slate-100">{rec.title}</h3>
-                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed line-clamp-2">{rec.reason}</p>
-                    </div>
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-800/40 text-[10px] font-mono">
-                      <span className="text-slate-400">Confidence: <strong className="text-cyan-400">{rec.confidence}%</strong></span>
-                      <div className="flex gap-1.5">
-                        <button 
-                          onClick={() => handleDismissAction(rec.id)}
-                          className="hover:bg-slate-800 text-slate-400 hover:text-slate-200 p-1.5 rounded transition"
-                          title="Dismiss"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                        <button 
-                          onClick={() => handleDeployAction(rec.id)}
-                          className="flex items-center gap-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 border border-cyan-800/50 px-2 py-1 rounded transition"
-                        >
-                          <span>Deploy</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))
-              )}
+                      {!alert.read && <span className="h-2 w-2 rounded-full bg-blue-600" />}
+                    </button>
+                  ))}
+                </div>
+              </SectionCard>
             </div>
-          </div>
 
-          {/* REALTIME CRIME ALERT LOGS */}
-          <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col gap-3">
-            <h2 className="text-xs font-mono font-semibold tracking-widest uppercase text-slate-400 border-b border-slate-900 pb-2.5 flex items-center gap-1.5">
-              <Bell className="w-4 h-4 text-rose-500" />
-              Live Alerts Center
-            </h2>
-            <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto">
-              {alerts.length === 0 ? (
-                <p className="text-xs text-slate-600 font-mono py-4 text-center">No recent alerts.</p>
-              ) : (
-                alerts.map((alert) => (
-                  <div 
-                    key={alert.id} 
-                    className={`p-2.5 rounded-lg border text-xs font-mono flex flex-col gap-1.5 transition ${
-                      alert.read ? 'bg-slate-900/20 border-slate-900 text-slate-400' : 
-                      alert.severity === 'Critical' ? 'bg-rose-950/20 border-rose-900/40 text-rose-300' :
-                      alert.severity === 'Warning' ? 'bg-amber-950/20 border-amber-900/30 text-amber-300' :
-                      'bg-slate-900 border-slate-800 text-slate-200'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold text-[10px] uppercase">{alert.district}</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] text-slate-500">
-                          {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        {!alert.read && (
-                          <button 
-                            onClick={() => handleReadAlert(alert.id)}
-                            className="text-[9px] text-cyan-400 hover:text-cyan-300 hover:underline"
-                          >
-                            Read
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-[11px] leading-relaxed">{alert.message}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-        </section>
-
-        {/* MIDDLE & RIGHT AREA: MAIN ACTION DISPLAY (9 COLS) */}
-        <section className="xl:col-span-9 flex flex-col gap-5">
-          
-          <AnimatePresence mode="wait">
-            {/* TAB 1: DIGITAL TWIN MAP & REGIONAL ANALYTICS */}
-            {activeTab === 'dashboard' && (
-              <motion.div 
-                key="dashboard"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                className="grid grid-cols-1 lg:grid-cols-12 gap-5"
+            <div className="min-w-0 space-y-3">
+              <SectionCard
+                title={activeModule === "graph" ? "Crime Knowledge Graph" : activeModule === "evidence" ? "EvidenceFlow AI Workbench" : activeModule === "simulation" ? "Intervention Simulation Engine" : "Karnataka Crime Hotspot Map"}
+                action={loading ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : <StatusPill tone="green">Live API</StatusPill>}
               >
-                {/* KARNATAKA DIGITAL TWIN SVG MAP (7 COLS) */}
-                <div className={`bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col gap-4 relative overflow-hidden transition-all duration-500 ease-in-out ${isMapExpanded ? 'fixed inset-4 z-[100] shadow-2xl shadow-cyan-900/20' : 'lg:col-span-7'}`}>
-                  
-                  {/* Grid background effect */}
-                  <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-20 pointer-events-none"></div>
-
-                  <div className="flex justify-between items-center border-b border-slate-900 pb-3 z-10">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                          <Compass className="w-4 h-4 text-cyan-400 animate-spin-slow" />
-                          Interactive Karnataka Digital Twin Map
-                        </h2>
-                        <button 
-                          onClick={() => {
-                            setCompareMode(!compareMode);
-                            if (compareMode) setCompareDistrict(null);
-                          }}
-                          className={`border rounded p-1 transition flex items-center gap-1.5 px-2 text-xs font-mono ${compareMode ? 'bg-purple-900/50 border-purple-500/50 text-purple-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800'}`}
-                          title={compareMode ? "Disable Compare Mode" : "Enable Compare Mode"}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"></path><path d="M4 21h5v-5"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg>
-                          Compare
-                        </button>
-                        <button 
-                          onClick={() => setIsMapExpanded(!isMapExpanded)}
-                          className="bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-cyan-400 rounded p-1 transition"
-                          title={isMapExpanded ? "Minimize Map" : "Expand Map"}
-                        >
-                          {isMapExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">Click any node marker to select district and pull live indices</p>
-                    </div>
-                    <div className="flex flex-col gap-2 items-end">
-                      <div className="flex gap-1 text-[10px] font-mono bg-slate-900 p-1 rounded-lg border border-slate-800">
-                        <button 
-                          onClick={() => setActiveRiskFilters(prev => prev.includes('Low') ? prev.filter(f => f !== 'Low') : [...prev, 'Low'])}
-                          className={`flex items-center gap-1.5 px-2 py-1 rounded transition ${activeRiskFilters.includes('Low') ? 'bg-slate-800 text-slate-200' : 'opacity-40 text-slate-400 hover:opacity-70'}`}
-                        >
-                          <span className="w-2.5 h-2.5 rounded bg-emerald-500"></span><span>Low</span>
-                        </button>
-                        <button 
-                          onClick={() => setActiveRiskFilters(prev => prev.includes('Medium') ? prev.filter(f => f !== 'Medium') : [...prev, 'Medium'])}
-                          className={`flex items-center gap-1.5 px-2 py-1 rounded transition ${activeRiskFilters.includes('Medium') ? 'bg-slate-800 text-slate-200' : 'opacity-40 text-slate-400 hover:opacity-70'}`}
-                        >
-                          <span className="w-2.5 h-2.5 rounded bg-yellow-500"></span><span>Med</span>
-                        </button>
-                        <button 
-                          onClick={() => setActiveRiskFilters(prev => prev.includes('High') ? prev.filter(f => f !== 'High') : [...prev, 'High'])}
-                          className={`flex items-center gap-1.5 px-2 py-1 rounded transition ${activeRiskFilters.includes('High') ? 'bg-slate-800 text-slate-200' : 'opacity-40 text-slate-400 hover:opacity-70'}`}
-                        >
-                          <span className="w-2.5 h-2.5 rounded bg-orange-500"></span><span>High</span>
-                        </button>
-                        <button 
-                          onClick={() => setActiveRiskFilters(prev => prev.includes('Critical') ? prev.filter(f => f !== 'Critical') : [...prev, 'Critical'])}
-                          className={`flex items-center gap-1.5 px-2 py-1 rounded transition ${activeRiskFilters.includes('Critical') ? 'bg-slate-800 text-slate-200' : 'opacity-40 text-slate-400 hover:opacity-70'}`}
-                        >
-                          <span className={`w-2.5 h-2.5 rounded bg-red-500 ${activeRiskFilters.includes('Critical') ? 'animate-pulse' : ''}`}></span><span>Crit</span>
-                        </button>
-                      </div>
-                      <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800 w-full">
-                        <button 
-                          className={`flex-1 text-[10px] font-mono py-1 px-2 rounded transition flex items-center justify-center gap-1.5 ${mapLayer === 'hotspots' ? 'bg-cyan-900/50 text-cyan-300 shadow-inner' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-300'}`} 
-                          onClick={() => setMapLayer('hotspots')}
-                        >
-                          <Layers className="w-3 h-3" />
-                          Nodes
-                        </button>
-                        <button 
-                          className={`flex-1 text-[10px] font-mono py-1 px-2 rounded transition flex items-center justify-center gap-1.5 ${mapLayer === 'heatmap' ? 'bg-cyan-900/50 text-cyan-300 shadow-inner' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-300'}`} 
-                          onClick={() => setMapLayer('heatmap')}
-                        >
-                          <Layers className="w-3 h-3" />
-                          Heatmap
-                        </button>
-                        <button 
-                          className={`flex-1 text-[10px] font-mono py-1 px-2 rounded transition flex items-center justify-center gap-1.5 ${mapLayer === 'boundaries' ? 'bg-cyan-900/50 text-cyan-300 shadow-inner' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-300'}`} 
-                          onClick={() => setMapLayer('boundaries')}
-                        >
-                          <Layers className="w-3 h-3" />
-                          Bounds
-                        </button>
-                        <button 
-                          className={`flex-1 text-[10px] font-mono py-1 px-2 rounded transition flex items-center justify-center gap-1.5 ${mapLayer === 'forecast' ? 'bg-amber-900/50 text-amber-300 shadow-inner' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-300'}`} 
-                          onClick={() => setMapLayer('forecast')}
-                        >
-                          <Layers className="w-3 h-3" />
-                          Forecast
-                        </button>
-                      </div>
+                {activeModule === "evidence" ? (
+                  <div className="grid gap-3 xl:grid-cols-[1fr_320px]">
+                    <textarea value={firText} onChange={(event) => setFirText(event.target.value)} className="min-h-[330px] resize-none rounded-lg border border-slate-200 p-3 text-sm leading-6 outline-none focus:border-blue-400" />
+                    <div className="space-y-3">
+                      <button onClick={runEvidenceAnalysis} disabled={busyAction === "analyze"} className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60">
+                        {busyAction === "analyze" && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Analyze FIR Evidence
+                      </button>
+                      {analysisResult && (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                          <div className="text-xs font-black uppercase text-[#063f9f]">Latest AI Extraction</div>
+                          <div className="mt-2 text-sm font-black">{analysisResult.incident.title}</div>
+                          <div className="mt-1 text-xs font-semibold">Category: {analysisResult.incident.category}</div>
+                          <div className="text-xs font-semibold">Severity: {analysisResult.incident.severity}</div>
+                          <div className="text-xs font-semibold">Confidence: {Math.round(analysisResult.confidence * 100)}%</div>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {analysisResult.modelSignals.map((signal) => <StatusPill key={signal} tone="blue">{signal}</StatusPill>)}
+                          </div>
+                        </div>
+                      )}
+                      <button onClick={resetTwin} className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-black text-[#06295c]">Reset Digital Twin</button>
                     </div>
                   </div>
-
-                  {/* SVG MAP WRAPPER */}
-                  <div 
-                    ref={mapWrapperRef}
-                    className="flex-1 min-h-[460px] flex items-center justify-center relative bg-slate-950/40 rounded-xl border border-slate-900/60 p-4 z-10 overflow-hidden cursor-grab active:cursor-grabbing"
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                  >
-                    
-                    {/* Compass Rose */}
-                    <div className="absolute bottom-4 right-4 text-slate-700 flex flex-col items-center gap-1 font-mono text-[9px]">
-                      <Compass className="w-8 h-8 stroke-[1] text-slate-600 animate-spin-slow" />
-                      <span>CRIME TWIN N-S</span>
-                    </div>
-
-                    {/* Minimap Overlay */}
-                    <div className="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-lg p-2 shadow-lg z-20 pointer-events-none w-24 h-24 flex items-center justify-center overflow-hidden">
-                      <svg viewBox="0 0 500 520" className="w-full h-full opacity-50">
-                        <path 
-                          d="M 120 40 L 190 20 L 260 40 L 320 80 L 350 140 L 330 190 L 360 250 L 390 320 L 360 380 L 380 430 L 330 480 L 290 500 L 220 480 L 160 440 L 140 370 L 120 310 L 90 250 L 70 210 L 110 160 Z"
-                          fill="#1e293b"
-                        />
+                ) : activeModule === "graph" ? (
+                  <div className="grid gap-3 xl:grid-cols-[1fr_280px]">
+                    <div className="relative min-h-[330px] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                      <svg viewBox="0 0 720 360" className="h-full min-h-[330px] w-full">
+                        {graph.edges.slice(0, 38).map((edge, index) => {
+                          const sourceIndex = graph.nodes.findIndex((node) => node.id === edge.source);
+                          const targetIndex = graph.nodes.findIndex((node) => node.id === edge.target);
+                          const sx = 80 + (sourceIndex % 8) * 80;
+                          const sy = 70 + Math.floor(sourceIndex / 8) * 80;
+                          const tx = 80 + (targetIndex % 8) * 80;
+                          const ty = 70 + Math.floor(targetIndex / 8) * 80;
+                          return <line key={edge.id} x1={sx} y1={sy} x2={tx} y2={ty} stroke="#cbd5e1" strokeWidth="1.5" opacity={0.8} />;
+                        })}
+                        {graph.nodes.slice(0, 32).map((node, index) => {
+                          const x = 80 + (index % 8) * 80;
+                          const y = 70 + Math.floor(index / 8) * 80;
+                          const color = node.type === "Person" ? "#2563eb" : node.type === "Incident" ? "#ef4444" : node.type === "Location" ? "#f97316" : "#059669";
+                          return (
+                            <g key={node.id}>
+                              <circle cx={x} cy={y} r="18" fill={color} opacity="0.92" />
+                              <text x={x} y={y + 34} textAnchor="middle" className="fill-slate-700 text-[9px] font-bold">
+                                {node.label.slice(0, 12)}
+                              </text>
+                            </g>
+                          );
+                        })}
                       </svg>
-                      {/* Viewport Indicator */}
-                      <div 
-                        className="absolute border border-cyan-400 bg-cyan-400/20"
-                        style={{
-                          width: `${100 / mapZoom}%`,
-                          height: `${100 / mapZoom}%`,
-                          left: `${50 - (mapPan.x / 5 / mapZoom) - (50 / mapZoom)}%`,
-                          top: `${50 - (mapPan.y / 5.2 / mapZoom) - (50 / mapZoom)}%`,
-                        }}
-                      />
                     </div>
-
-                    {/* Dynamic Legend Overlay */}
-                    <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-lg p-2.5 shadow-lg z-20 flex flex-col gap-1 pointer-events-none">
-                      <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase">Active Hotspots Rendered</span>
-                      <strong className="text-xl text-cyan-400 font-bold font-mono">
-                        {mapLayer === 'forecast' 
-                          ? districts.filter(d => activeRiskFilters.includes(d.riskLevel)).reduce((sum, d) => sum + (simResult && simResult.targetDistrict === d.name && simResult.predictiveHotspots ? simResult.predictiveHotspots.length : d.hotspots.length), 0)
-                          : districts.filter(d => activeRiskFilters.includes(d.riskLevel)).reduce((sum, d) => sum + d.hotspots.length, 0)}
-                      </strong>
-                      <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase mt-1">Incidents Rendered</span>
-                      <strong className="text-xl text-cyan-400 font-bold font-mono">
-                        {incidents.filter(inc => activeIncidentFilters.includes(inc.category) && activeRiskFilters.includes(districts.find(d => d.name === inc.location.district)?.riskLevel || 'Low')).length}
-                      </strong>
-                    </div>
-
-                    {/* Incident Filter Overlay */}
-                    <div className="absolute top-20 left-4 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-lg p-3 shadow-lg z-20 flex flex-col gap-2 w-36" onMouseDown={(e) => e.stopPropagation()} onMouseUp={(e) => e.stopPropagation()}>
-                      <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase flex items-center gap-1.5"><Filter className="w-3 h-3 text-cyan-400"/> Incident Filter</span>
-                      <div className="flex flex-col gap-1.5 text-[10px] font-mono mt-1">
-                        {['Theft', 'Assault', 'Fraud', 'Homicide', 'Vandalism', 'Narcotics', 'Other'].map(cat => (
-                          <label key={cat} className="flex items-center gap-2 cursor-pointer group">
-                            <input 
-                              type="checkbox" 
-                              checked={activeIncidentFilters.includes(cat)}
-                              onChange={() => {
-                                setActiveIncidentFilters(prev => 
-                                  prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-                                )
-                              }}
-                              className="w-3 h-3 accent-cyan-500 rounded-sm bg-slate-800 border-slate-700 cursor-pointer"
-                            />
-                            <span className={`transition ${activeIncidentFilters.includes(cat) ? 'text-slate-200' : 'text-slate-500 group-hover:text-slate-400'}`}>{cat}</span>
-                          </label>
+                    <div className="space-y-3">
+                      <StatusPill tone="blue">{graph.nodes.length} nodes</StatusPill>
+                      <StatusPill tone="green">{graph.edges.length} links</StatusPill>
+                      <div className="rounded-lg border border-slate-200 p-3">
+                        <div className="mb-2 text-xs font-black uppercase text-[#063f9f]">Top Central Entities</div>
+                        {(graphInsights?.centrality ?? []).slice(0, 6).map((item) => (
+                          <div key={item.node.id} className="flex justify-between border-t border-slate-100 py-2 text-xs">
+                            <b>{item.node.label}</b>
+                            <span>{item.degree} links</span>
+                          </div>
                         ))}
                       </div>
                     </div>
-
-                    {/* Map Controls */}
-                    <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
-                      <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-lg shadow-lg flex flex-col items-center overflow-hidden py-1">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setMapZoom(prev => Math.min(5, prev * 1.2)); }}
-                          className="p-2 text-slate-400 hover:bg-slate-800 hover:text-cyan-400 transition"
-                          title="Zoom In"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                        </button>
-                        
-                        <div className="h-24 py-2 w-full flex justify-center" onClick={(e) => e.stopPropagation()}>
-                           <input 
-                             type="range" 
-                             min="0.5" 
-                             max="5" 
-                             step="0.1" 
-                             value={mapZoom}
-                             onChange={(e) => setMapZoom(parseFloat(e.target.value))}
-                             className="vertical-slider w-1 h-full appearance-none bg-slate-800 rounded-full outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-cyan-400 [&::-webkit-slider-thumb]:rounded-full cursor-pointer"
-                           />
-                        </div>
-
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setMapZoom(prev => Math.max(0.5, prev * 0.8)); }}
-                          className="p-2 text-slate-400 hover:bg-slate-800 hover:text-cyan-400 transition"
-                          title="Zoom Out"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                        </button>
+                  </div>
+                ) : activeModule === "simulation" ? (
+                  <div className="grid gap-3 xl:grid-cols-[1fr_330px]">
+                    <div className="rounded-lg border border-slate-200 p-4">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="text-xs font-black uppercase text-[#063f9f]">
+                          Target District
+                          <select value={selectedDistrict} onChange={(event) => setSelectedDistrict(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm text-slate-800">
+                            {districts.map((district) => <option key={district.name}>{district.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="text-xs font-black uppercase text-[#063f9f]">
+                          Intervention
+                          <select value={scenarioType} onChange={(event) => setScenarioType(event.target.value as ScenarioType)} className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm text-slate-800">
+                            {["Patrol Reallocation", "Temporary Checkpoints", "Street Lighting", "Drone Surveillance", "Community Outreach"].map((item) => <option key={item}>{item}</option>)}
+                          </select>
+                        </label>
                       </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setMapZoom(1); setMapPan({ x: 0, y: 0 }); }}
-                        className="bg-slate-900/80 backdrop-blur-md border border-slate-800 p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-cyan-400 transition shadow-lg"
-                        title="Reset View"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
+                      <button onClick={runScenario} disabled={busyAction === "scenario"} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white">
+                        {busyAction === "scenario" && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Run Scenario Simulation
                       </button>
                     </div>
-
-                    <svg 
-                      viewBox="0 0 500 520" 
-                      className="w-full max-w-[440px] h-auto drop-shadow-[0_0_25px_rgba(6,182,212,0.03)] origin-center transition-transform duration-75 ease-out"
-                      style={{ transform: `translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapZoom})` }}
-                    >
-                      <defs>
-                        <radialGradient id="heatmap-critical" cx="50%" cy="50%" r="50%">
-                          <stop offset="0%" stopColor="rgba(239, 68, 68, 0.6)" />
-                          <stop offset="100%" stopColor="rgba(239, 68, 68, 0)" />
-                        </radialGradient>
-                        <radialGradient id="heatmap-high" cx="50%" cy="50%" r="50%">
-                          <stop offset="0%" stopColor="rgba(249, 115, 22, 0.5)" />
-                          <stop offset="100%" stopColor="rgba(249, 115, 22, 0)" />
-                        </radialGradient>
-                        <radialGradient id="heatmap-medium" cx="50%" cy="50%" r="50%">
-                          <stop offset="0%" stopColor="rgba(234, 179, 8, 0.4)" />
-                          <stop offset="100%" stopColor="rgba(234, 179, 8, 0)" />
-                        </radialGradient>
-                        <radialGradient id="heatmap-low" cx="50%" cy="50%" r="50%">
-                          <stop offset="0%" stopColor="rgba(16, 185, 129, 0.3)" />
-                          <stop offset="100%" stopColor="rgba(16, 185, 129, 0)" />
-                        </radialGradient>
-                      </defs>
-
-                      {/* Outline of Karnataka (Simplistic polygonal grid borders for visual aesthetic) */}
-                      <path 
-                        d="M 120 40 L 190 20 L 260 40 L 320 80 L 350 140 L 330 190 L 360 250 L 390 320 L 360 380 L 380 430 L 330 480 L 290 500 L 220 480 L 160 440 L 140 370 L 120 310 L 90 250 L 70 210 L 110 160 Z"
-                        fill="#030712"
-                        stroke="#1e293b"
-                        strokeWidth="2"
-                        strokeDasharray="4 4"
-                      />
-
-                      {/* HEATMAP LAYER */}
-                      {mapLayer === 'heatmap' && districts.filter(d => activeRiskFilters.includes(d.riskLevel)).map((d) => {
-                        const mainHotspot = d.hotspots[0] || { coords: [12.9716, 77.5946] };
-                        const { cx, cy } = mapCoordsToSvg(mainHotspot.coords[0], mainHotspot.coords[1]);
-                        const gradientId = 
-                          d.riskLevel === "Critical" ? "url(#heatmap-critical)" :
-                          d.riskLevel === "High" ? "url(#heatmap-high)" :
-                          d.riskLevel === "Medium" ? "url(#heatmap-medium)" : "url(#heatmap-low)";
-                        const r = d.riskLevel === "Critical" ? 65 : d.riskLevel === "High" ? 55 : 45;
-                        return (
-                          <circle key={`heatmap-${d.name}`} cx={cx} cy={cy} r={r} fill={gradientId} style={{ mixBlendMode: 'screen' }} className="pointer-events-none" />
-                        );
-                      })}
-
-                      {/* FORECAST LAYER (Predictive Hotspots from Simulation Engine) */}
-                      {mapLayer === 'forecast' && districts.filter(d => activeRiskFilters.includes(d.riskLevel)).map((d) => {
-                        // Use simulation result if available for this district, else default to slightly worsened state
-                        let renderHotspots = d.hotspots;
-                        if (simResult && simResult.targetDistrict === d.name && simResult.predictiveHotspots) {
-                          renderHotspots = simResult.predictiveHotspots;
-                        } else {
-                           // Simulated worsening if no sim has been run for this specific district
-                           renderHotspots = d.hotspots.map(h => ({
-                             area: h.area + " (Est)",
-                             coords: [h.coords[0] + 0.015, h.coords[1] + 0.015] as [number, number],
-                             risk: Math.min(100, h.risk * 1.15)
-                           }));
-                        }
-                        
-                        return renderHotspots.map((h, i) => {
-                          const { cx, cy } = mapCoordsToSvg(h.coords[0], h.coords[1]);
-                          const riskLevel = h.risk > 75 ? "Critical" : h.risk > 50 ? "High" : h.risk > 25 ? "Medium" : "Low";
-                          const gradientId = 
-                            riskLevel === "Critical" ? "url(#heatmap-critical)" :
-                            riskLevel === "High" ? "url(#heatmap-high)" :
-                            riskLevel === "Medium" ? "url(#heatmap-medium)" : "url(#heatmap-low)";
-                          const r = riskLevel === "Critical" ? 65 : riskLevel === "High" ? 55 : 45;
-                          
-                          return (
-                            <circle key={`forecast-${d.name}-${i}`} cx={cx} cy={cy} r={r} fill={gradientId} style={{ mixBlendMode: 'screen' }} className="pointer-events-none opacity-80 animate-pulse" />
-                          );
-                        });
-                      })}
-
-                      {/* BOUNDARIES LAYER (simulated rough boundary polygons around nodes) */}
-                      {mapLayer === 'boundaries' && districts.filter(d => activeRiskFilters.includes(d.riskLevel)).map((d) => {
-                        const mainHotspot = d.hotspots[0] || { coords: [12.9716, 77.5946] };
-                        const { cx, cy } = mapCoordsToSvg(mainHotspot.coords[0], mainHotspot.coords[1]);
-                        const isHovered = hoveredDistrict?.d.name === d.name;
-                        const isSelected = selectedDistrict === d.name;
-                        const isSecondarySelection = compareMode && d.name === compareDistrict;
-                        const isHighlighted = isHovered || isSelected;
-                        const colorClass = 
-                          d.riskLevel === "Critical" ? "#ef4444" :
-                          d.riskLevel === "High" ? "#f97316" :
-                          d.riskLevel === "Medium" ? "#eab308" : "#10b981";
-                        return (
-                          <g key={`bounds-${d.name}`}>
-                            <path 
-                              d={`M ${cx-30} ${cy-10} Q ${cx-10} ${cy-30} ${cx+20} ${cy-20} T ${cx+40} ${cy+10} T ${cx+10} ${cy+30} T ${cx-30} ${cy+10} Z`}
-                              fill={isHighlighted ? `${colorClass}40` : `${colorClass}10`}
-                              stroke={isSecondarySelection ? "#a855f7" : colorClass}
-                              strokeWidth={isHighlighted ? "2" : "1"}
-                              strokeDasharray={isHighlighted ? "none" : "2 2"}
-                              className="pointer-events-none transition-all duration-300"
-                            />
-                          </g>
-                        );
-                      })}
-
-                      {/* HOTSPOTS / MESH LAYER */}
-                      {mapLayer === 'hotspots' && districts.filter(d => activeRiskFilters.includes(d.riskLevel)).map((d1, i, arr) => {
-                        const { cx: cx1, cy: cy1 } = mapCoordsToSvg(d1.hotspots[0]?.coords[0] || 12.9716, d1.hotspots[0]?.coords[1] || 77.5946);
-                        return arr.slice(i + 1, i + 3).map((d2, j) => {
-                          const { cx: cx2, cy: cy2 } = mapCoordsToSvg(d2.hotspots[0]?.coords[0] || 12.9716, d2.hotspots[0]?.coords[1] || 77.5946);
-                          return (
-                            <line
-                              key={`l-${i}-${j}`}
-                              x1={cx1}
-                              y1={cy1}
-                              x2={cx2}
-                              y2={cy2}
-                              stroke="rgba(6,182,212,0.06)"
-                              strokeWidth="1"
-                            />
-                          );
-                        });
-                      })}
-
-                      {/* INCIDENTS LAYER */}
-                      {incidents
-                        .filter(inc => activeIncidentFilters.includes(inc.category) && activeRiskFilters.includes(districts.find(d => d.name === inc.location.district)?.riskLevel || 'Low'))
-                        .map((inc, idx) => {
-                          const { cx, cy } = mapCoordsToSvg(inc.location.coordinates[0], inc.location.coordinates[1]);
-                          const offsetX = (idx % 5 - 2) * 2;
-                          const offsetY = (Math.floor(idx / 5) % 5 - 2) * 2;
-                          return (
-                            <circle 
-                              key={`inc-point-${inc.id}-${idx}`}
-                              cx={cx + offsetX}
-                              cy={cy + offsetY}
-                              r="2.5"
-                              fill="#22d3ee" 
-                              stroke="#020617"
-                              strokeWidth="0.5"
-                              className="pointer-events-none opacity-90 shadow-sm"
-                            />
-                          );
-                      })}
-
-                      {/* Plotted District Nodes */}
-                      {districts.filter(d => activeRiskFilters.includes(d.riskLevel)).map((d) => {
-                        const mainHotspot = d.hotspots[0] || { coords: [12.9716, 77.5946] };
-                        const { cx, cy } = mapCoordsToSvg(mainHotspot.coords[0], mainHotspot.coords[1]);
-                        const isSelected = d.name === selectedDistrict || (compareMode && d.name === compareDistrict);
-                        const isPrimarySelection = d.name === selectedDistrict;
-                        const isSecondarySelection = compareMode && d.name === compareDistrict;
-
-                        // Color by risk level
-                        const colorClass = 
-                          d.riskLevel === "Critical" ? "#ef4444" :
-                          d.riskLevel === "High" ? "#f97316" :
-                          d.riskLevel === "Medium" ? "#eab308" : "#10b981";
-
-                        return (
-                          <g 
-                            key={d.name} 
-                            className={`cursor-pointer group ${mapLayer !== 'hotspots' && !isSelected ? 'opacity-40' : 'opacity-100'} transition-opacity duration-300`}
-                            onClick={() => {
-                              if (compareMode) {
-                                if (d.name !== selectedDistrict) {
-                                  setCompareDistrict(d.name);
-                                }
-                              } else {
-                                setSelectedDistrict(d.name);
-                                setTimeout(() => {
-                                  document.getElementById("live-district-profile")?.scrollIntoView({ 
-                                    behavior: "smooth", 
-                                    block: "nearest" 
-                                  });
-                                }, 30);
-                              }
-                            }}
-                            onMouseEnter={() => {
-                              if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                              setHoveredDistrict({ d, cx, cy });
-                            }}
-                            onMouseLeave={() => {
-                              hoverTimeoutRef.current = setTimeout(() => {
-                                setHoveredDistrict(null);
-                              }, 200);
-                            }}
-                          >
-                            {/* Selected Pulsing Ring */}
-                            {isSelected && (
-                              <circle 
-                                cx={cx} 
-                                cy={cy} 
-                                r="18" 
-                                fill="none" 
-                                stroke={isSecondarySelection ? "#a855f7" : colorClass} 
-                                strokeWidth="1.5" 
-                                className="radar-pulse"
-                              />
-                            )}
-
-                            {/* Node Core */}
-                            <circle 
-                              cx={cx} 
-                              cy={cy} 
-                              r={isSelected ? "8" : "5.5"} 
-                              fill={isSelected ? "#ffffff" : colorClass} 
-                              stroke="#020617" 
-                              strokeWidth="2"
-                              className={`transition-all duration-300 group-hover:scale-125 ${d.riskLevel === 'Critical' ? 'animate-pulse' : ''}`}
-                            />
-
-                            {/* Tooltip Label */}
-                            <text
-                              x={cx}
-                              y={cy - 14}
-                              textAnchor="middle"
-                              fill={isSelected ? "#ffffff" : "#94a3b8"}
-                              fontSize={isSelected ? "10" : "8.5"}
-                              fontFamily="JetBrains Mono, monospace"
-                              fontWeight={isSelected ? "bold" : "normal"}
-                              className="opacity-90 group-hover:opacity-100 transition pointer-events-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
-                            >
-                              {d.name} ({d.crimeIndex})
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
-
-                    {/* Floating Hover Tooltip */}
-                    <AnimatePresence>
-                      {hoveredDistrict && (
-                        <motion.div 
-                          initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                          transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                          className="absolute z-50 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-2xl min-w-[200px] flex flex-col gap-2"
-                          onMouseEnter={() => {
-                            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                          }}
-                          onMouseLeave={() => {
-                            hoverTimeoutRef.current = setTimeout(() => {
-                              setHoveredDistrict(null);
-                            }, 200);
-                          }}
-                          style={{ 
-                            left: `calc(${(hoveredDistrict.cx / 500) * 100}% + 10px)`, 
-                            top: `calc(${(hoveredDistrict.cy / 520) * 100}% - 10px)`,
-                            transform: "translate(-50%, -100%)"
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-1.5">
-                            <span className="text-xs font-bold text-white tracking-tight">{hoveredDistrict.d.name}</span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase border ${
-                              hoveredDistrict.d.riskLevel === 'Critical' ? 'bg-red-950/60 text-red-400 border-red-900/30' :
-                              hoveredDistrict.d.riskLevel === 'High' ? 'bg-orange-950/60 text-orange-400 border-orange-900/30' :
-                              hoveredDistrict.d.riskLevel === 'Medium' ? 'bg-yellow-950/60 text-yellow-400 border-yellow-900/30' :
-                              'bg-emerald-950/60 text-emerald-400 border-emerald-900/30'
-                            }`}>
-                              {hoveredDistrict.d.riskLevel}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5 text-[11px] font-mono">
-                            <div className="flex justify-between items-center text-slate-400">
-                              <span>Active Incidents:</span>
-                              <strong className="text-cyan-400 font-bold">
-                                {incidents.filter(i => i.location.district === hoveredDistrict.d.name).length}
-                              </strong>
-                            </div>
-                            <div className="flex justify-between items-center text-slate-400">
-                              <span>Yearly Crime Count:</span>
-                              <strong className="text-slate-200">{hoveredDistrict.d.crimeCount}</strong>
-                            </div>
-                            <div className="flex justify-between items-center text-slate-400">
-                              <span>Crime Index:</span>
-                              <strong className="text-yellow-400">{hoveredDistrict.d.crimeIndex}/100</strong>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-2 mt-1">
-                            <button 
-                              onClick={() => {
-                                setMapPan({ x: 250 - hoveredDistrict.cx * 1.5, y: 260 - hoveredDistrict.cy * 1.5 });
-                                setMapZoom(1.5);
-                              }}
-                              className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] py-1 rounded transition"
-                            >
-                              Center Map
-                            </button>
-                            <button 
-                              onClick={() => {
-                                const dataStr = JSON.stringify(hoveredDistrict.d, null, 2);
-                                const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                                const exportFileDefaultName = `${hoveredDistrict.d.name.replace(/ /g, '_')}_profile.json`;
-                                const linkElement = document.createElement('a');
-                                linkElement.setAttribute('href', dataUri);
-                                linkElement.setAttribute('download', exportFileDefaultName);
-                                linkElement.click();
-                              }}
-                              className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] py-1 rounded transition"
-                            >
-                              Export Details
-                            </button>
-                          </div>
-
-                          <div className={`h-1 w-full rounded-full mt-1 ${
-                            hoveredDistrict.d.riskLevel === 'Critical' ? 'bg-red-500' :
-                            hoveredDistrict.d.riskLevel === 'High' ? 'bg-orange-500' :
-                            hoveredDistrict.d.riskLevel === 'Medium' ? 'bg-yellow-500' :
-                            'bg-emerald-500'
-                          }`} />
-                        </motion.div>
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                      <div className="text-xs font-black uppercase text-emerald-700">Simulation Result</div>
+                      {scenario ? (
+                        <div className="mt-3 space-y-2 text-sm font-semibold">
+                          <div>{scenario.name}</div>
+                          <div>Baseline risk: <b>{scenario.baselineRisk}</b></div>
+                          <div>Projected risk: <b>{scenario.projectedRisk}</b></div>
+                          <div>Confidence: <b>{scenario.confidence}%</b></div>
+                          <div>Cost: <b>₹{scenario.cost.toLocaleString("en-IN")}</b></div>
+                          <p className="text-xs leading-5">{scenario.benefit}</p>
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm font-semibold text-slate-600">Choose an intervention and run simulation.</p>
                       )}
-                    </AnimatePresence>
+                    </div>
                   </div>
-                </div>
-
-                {/* SELECTED DISTRICT INTELLIGENCE & HEATMAPS (5 COLS) */}
-                <div className="lg:col-span-5 flex flex-col gap-5">
-                  
-                  {/* LIVE DISTRICT PROFILE */}
-                  <div id="live-district-profile" className="bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-cyan-500/5 to-transparent pointer-events-none"></div>
-
-                    {activeDistrictMetrics ? (
-                      <div className="flex flex-col gap-4">
-                        <div className="flex justify-between items-start border-b border-slate-900 pb-3">
-                          <div>
-                            <span className="text-[10px] font-mono tracking-wider text-cyan-400 font-semibold uppercase">Selected District</span>
-                            <h3 className="text-lg font-display font-bold text-white mt-0.5">{activeDistrictMetrics.name}</h3>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <span className={`px-2.5 py-1 text-xs font-mono border rounded uppercase font-semibold ${
-                              activeDistrictMetrics.riskLevel === "Critical" ? "bg-red-950/40 border-red-900 text-red-400" :
-                              activeDistrictMetrics.riskLevel === "High" ? "bg-orange-950/40 border-orange-900 text-orange-400" :
-                              activeDistrictMetrics.riskLevel === "Medium" ? "bg-yellow-950/40 border-yellow-900 text-yellow-400" :
-                              "bg-emerald-950/40 border-emerald-900 text-emerald-400"
-                            }`}>
-                              {activeDistrictMetrics.riskLevel} Risk
-                            </span>
-                            <button
-                              onClick={async () => {
-                                const profileEl = document.getElementById('live-district-profile');
-                                if (profileEl) {
-                                  try {
-                                    const canvas = await html2canvas(profileEl, { backgroundColor: '#020617' });
-                                    const imgData = canvas.toDataURL('image/png');
-                                    const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
-                                    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-                                    pdf.save(`${activeDistrictMetrics.name.replace(/\s+/g, '_')}_Report.pdf`);
-                                  } catch (err) {
-                                    console.error('Error generating PDF:', err);
-                                  }
-                                }
-                              }}
-                              className="text-[9px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-400 px-2 py-1 rounded transition flex items-center gap-1 border border-slate-800"
-                            >
-                              <Download className="w-3 h-3" />
-                              Export PDF
+                ) : (
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_310px]">
+                    <KarnatakaMap
+                      districts={districts}
+                      selectedDistrict={activeDistrict?.name ?? ""}
+                      onSelectDistrict={(name) => setSelectedDistrict(name)}
+                    />
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">Select Crime Category</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {categories.map((item) => (
+                            <button key={item} onClick={() => setCategory(item)} className={classNames("rounded-md border px-3 py-2 text-[11px] font-bold", category === item ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700")}>
+                              {item}
                             </button>
-                          </div>
-                        </div>
-
-                        {/* RATING GAUGE */}
-                        <div className="grid grid-cols-3 gap-3.5">
-                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg flex flex-col gap-1">
-                            <span className="text-[10px] font-mono text-slate-500 uppercase">Crime Index</span>
-                            <span className="text-xl font-display font-bold text-white font-mono">{activeDistrictMetrics.crimeIndex}<span className="text-xs text-slate-500">/100</span></span>
-                            <div className="w-full bg-slate-850 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full ${
-                                  activeDistrictMetrics.crimeIndex > 75 ? 'bg-red-500' :
-                                  activeDistrictMetrics.crimeIndex > 55 ? 'bg-orange-500' :
-                                  activeDistrictMetrics.crimeIndex > 35 ? 'bg-yellow-500' : 'bg-emerald-500'
-                                }`}
-                                style={{ width: `${activeDistrictMetrics.crimeIndex}%` }}
-                              ></div>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg flex flex-col gap-1 justify-between">
-                            <div>
-                              <span className="text-[10px] font-mono text-slate-500 uppercase">Total Logged</span>
-                              <span className="text-xl font-display font-bold text-white block mt-0.5 font-mono">{activeDistrictMetrics.crimeCount}</span>
-                            </div>
-                            <span className="text-[9px] text-slate-500 font-mono">FIR Count / Year</span>
-                          </div>
-
-                          <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg flex flex-col gap-1 justify-between">
-                            <div>
-                              <span className="text-[10px] font-mono text-slate-500 uppercase">Patrol Units</span>
-                              <span className="text-xl font-display font-bold text-cyan-400 block mt-0.5 font-mono">{activeDistrictMetrics.patrolAvailable}</span>
-                            </div>
-                            <span className="text-[9px] text-emerald-500 font-mono">● Active Beat</span>
-                          </div>
-                        </div>
-
-                        {/* 7-DAY TREND */}
-                        <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3 flex flex-col gap-2">
-                          <span className="text-[10px] font-mono text-slate-400 font-semibold tracking-wider uppercase">7-Day Crime Index Trend</span>
-                          <div className="h-16 w-full mt-1">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart data={
-                                activeDistrictMetrics.trend7Day 
-                                  ? activeDistrictMetrics.trend7Day.map((val, i) => ({ day: i, value: val }))
-                                  : Array.from({length: 7}, (_, i) => ({ day: i, value: Math.max(0, activeDistrictMetrics.crimeIndex + Math.sin(i)*10 + (i%2 === 0 ? 5 : -5)) }))
-                              }>
-                                <YAxis domain={['dataMin - 10', 'dataMax + 10']} hide />
-                                <Line type="monotone" dataKey="value" stroke="#22d3ee" strokeWidth={2} dot={{ r: 2, fill: '#22d3ee' }} isAnimationActive={false} />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-
-                        {/* TACTICAL INSIGHTS */}
-                        {(() => {
-                          const districtIncidents = incidents.filter(i => i.location.district === activeDistrictMetrics.name);
-                          const categoryCounts = districtIncidents.reduce((acc, inc) => {
-                            acc[inc.category] = (acc[inc.category] || 0) + 1;
-                            return acc;
-                          }, {} as Record<string, number>);
-                          const topCategories = Object.entries(categoryCounts)
-                            .sort((a, b) => b[1] - a[1])
-                            .slice(0, 3);
-                          
-                          if (topCategories.length === 0) return null;
-                          
-                          return (
-                            <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3 flex flex-col gap-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-mono text-slate-400 font-semibold tracking-wider uppercase flex items-center gap-1.5"><TrendingUp className="w-3 h-3 text-cyan-400"/> Tactical Insights (Top Issues)</span>
-                                <div className="flex gap-2">
-                                  <button 
-                                    onClick={() => {
-                                      const textToRead = `Tactical Insights for ${activeDistrictMetrics.name}. The top crime categories are: ${topCategories.map(([cat, count]) => `${count} records of ${cat}`).join(', ')}. Recommend preemptive patrol staging.`;
-                                      const utterance = new SpeechSynthesisUtterance(textToRead);
-                                      window.speechSynthesis.speak(utterance);
-                                    }}
-                                    className="text-[9px] font-mono bg-cyan-950/40 border border-cyan-900/50 hover:bg-cyan-900/60 text-cyan-400 px-2 py-0.5 rounded transition flex items-center gap-1"
-                                  >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                                    Narrate
-                                  </button>
-                                  <button 
-                                    onClick={async () => {
-                                      const shareText = `Tactical Insights for ${activeDistrictMetrics.name}:\n${topCategories.map(([cat, count], idx) => `${idx + 1}. ${cat} (${count} records)`).join('\n')}`;
-                                      try {
-                                        if (navigator.share) {
-                                          await navigator.share({
-                                            title: `Tactical Insights - ${activeDistrictMetrics.name}`,
-                                            text: shareText,
-                                          });
-                                        } else {
-                                          await navigator.clipboard.writeText(shareText);
-                                          alert("Insights copied to clipboard!");
-                                        }
-                                      } catch (err) {
-                                        console.error("Error sharing:", err);
-                                      }
-                                    }}
-                                    className="text-[9px] font-mono bg-cyan-950/40 border border-cyan-900/50 hover:bg-cyan-900/60 text-cyan-400 px-2 py-0.5 rounded transition flex items-center gap-1"
-                                  >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-                                    Share
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-1.5 mt-1">
-                                {topCategories.map(([cat, count], idx) => (
-                                  <div key={cat} className="flex justify-between items-center text-xs font-mono">
-                                    <span className="text-slate-300 flex items-center gap-1.5"><span className="text-slate-500">{idx + 1}.</span> {cat}</span>
-                                    <span className="text-cyan-400 font-semibold">{count} record{count !== 1 ? 's' : ''}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        {/* PREDICTIVE RISK WARNING */}
-                        <div className="bg-rose-950/20 border border-rose-900/40 rounded-lg p-3 flex gap-3 items-start relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 blur-3xl -mr-10 -mt-10 rounded-full pointer-events-none"></div>
-                          <div className="mt-0.5 z-10">
-                            <AlertTriangle className="w-4 h-4 text-rose-500 animate-pulse" />
-                          </div>
-                          <div className="flex flex-col gap-1 z-10">
-                            <span className="text-[10px] font-mono text-rose-400 font-bold uppercase tracking-wider">Predictive Risk Forecast (24h)</span>
-                            <p className="text-xs text-rose-200/80 leading-relaxed">
-                              Historical pattern analysis indicates a <strong className="text-rose-300">{(activeDistrictMetrics.crimeIndex * 0.85).toFixed(1)}% probability</strong> of incident clustering in the northern sector between 18:00 and 02:00. Recommend preemptive patrol staging.
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* DISTRICT HOTSPOTS */}
-                        <div className="flex flex-col gap-2.5">
-                          <span className="text-xs font-mono text-slate-400 font-semibold tracking-wider uppercase border-b border-slate-900 pb-2">
-                            Regional Hotspot Analysis
-                          </span>
-                          <div className="flex flex-col gap-2">
-                            {activeDistrictMetrics.hotspots?.map((hot) => (
-                              <div key={hot.area} className="bg-slate-900/40 border border-slate-900 px-3.5 py-2.5 rounded-lg flex items-center justify-between">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-ping"></div>
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-slate-200">{hot.area}</h4>
-                                    <span className="text-[10px] text-slate-500 font-mono">Coords: {hot.coords[0].toFixed(4)}, {hot.coords[1].toFixed(4)}</span>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <span className="text-xs font-mono font-bold text-slate-300">{hot.risk}% Risk</span>
-                                  <span className="text-[9px] text-rose-500 block font-mono">CRITICAL THREAT</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* PREDICTION SUMMARY NOTE */}
-                        <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 flex gap-2.5 text-xs text-slate-400 leading-relaxed font-mono">
-                          <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                          <p>
-                            Digital Twin predictive models show that deploying an additional <strong>3 patrol units</strong> in <strong>{activeDistrictMetrics.name}</strong> will decrease local risk ratings by <strong>12-15%</strong> within 48 hours. Use the <strong>Simulation Engine</strong> tab to model custom tactical interventions.
-                          </p>
+                          ))}
                         </div>
                       </div>
-                    ) : (
-                      <p className="text-xs font-mono text-slate-500 text-center py-12">No district selected.</p>
-                    )}
-                  </div>
-
-                  {/* INCIDENT DETAILS TRACKER */}
-                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-3.5">
-                    <div className="flex justify-between items-center border-b border-slate-900 pb-3">
-                      <h3 className="text-xs font-mono font-semibold tracking-widest uppercase text-slate-400 flex items-center gap-1.5">
-                        <Activity className="w-4 h-4 text-cyan-400" />
-                        District Incident Ledger
-                      </h3>
-                      <span className="text-[10px] font-mono text-slate-500 bg-slate-900 border border-slate-850 px-2 py-0.5 rounded">
-                        {incidents.filter(i => i.location.district === selectedDistrict).length} Incidents
-                      </span>
-                    </div>
-
-                    <div className="flex flex-col gap-3 max-h-[220px] overflow-y-auto">
-                      {incidents.filter(i => i.location.district === selectedDistrict).length === 0 ? (
-                        <p className="text-xs text-slate-500 font-mono py-8 text-center">
-                          No recent incidents logged for {selectedDistrict}. Ingest documents via EvidenceFlow AI to register crime records.
-                        </p>
-                      ) : (
-                        incidents.filter(i => i.location.district === selectedDistrict).map((inc) => (
-                          <div 
-                            key={inc.id} 
-                            onClick={() => setSelectedIncident(inc)}
-                            className={`p-3 rounded-lg border cursor-pointer transition flex flex-col gap-2 ${
-                              selectedIncident?.id === inc.id ? 'bg-slate-900 border-cyan-800' : 'bg-slate-900/40 border-slate-850 hover:border-slate-800'
-                            }`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <span className="text-[10px] font-mono text-cyan-400 uppercase font-semibold">{inc.category}</span>
-                              <span className={`px-1.5 py-0.5 text-[9px] font-mono rounded uppercase ${
-                                inc.severity === "Critical" ? "bg-red-950/60 text-red-400 border border-red-900/30" :
-                                inc.severity === "High" ? "bg-orange-950/60 text-orange-400 border border-orange-900/30" :
-                                "bg-yellow-950/60 text-yellow-400 border border-yellow-900/30"
-                              }`}>
-                                {inc.severity}
+                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <h3 className="mb-3 text-xs font-black uppercase text-[#063f9f]">District Risk Score</h3>
+                        <div className="space-y-3">
+                          {[...(predictions?.districtRisk ?? [])].sort((a, b) => b.score - a.score).slice(0, 5).map((risk) => (
+                            <button key={risk.district} onClick={() => setSelectedDistrict(risk.district)} className="grid w-full grid-cols-[110px_1fr_34px] items-center gap-2 text-left text-xs font-bold">
+                              <span className="truncate">{risk.district}</span>
+                              <span className="h-1.5 rounded-full bg-slate-100">
+                                <span className={classNames("block h-full rounded-full", risk.score >= 80 ? "bg-red-500" : risk.score >= 60 ? "bg-orange-500" : "bg-yellow-400")} style={{ width: `${risk.score}%` }} />
                               </span>
-                            </div>
-                            <h4 className="text-xs font-bold text-slate-200 line-clamp-1">{inc.title}</h4>
-                            <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{inc.description}</p>
-                            <div className="flex justify-between items-center text-[9px] text-slate-500 font-mono border-t border-slate-800/40 pt-1.5 mt-0.5">
-                              <span>Location: {inc.location.area}</span>
-                              <span>{inc.date} | {inc.time}</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
+                              <span>{risk.score}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">Time Range</h3>
+                        <div className="flex gap-2">
+                          {["7D", "30D", "90D", "YTD"].map((item) => (
+                            <button key={item} onClick={() => setTimeRange(item)} className={classNames("rounded-md border px-3 py-2 text-xs font-bold", timeRange === item ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white")}>{item}</button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
+              </SectionCard>
 
-                </div>
-              </motion.div>
-            )}
-
-            {/* TAB 2: EVIDENCEFLOW AI (INGESTION & EXTRACTION) */}
-            {activeTab === 'evidenceflow' && (
-              <motion.div 
-                key="evidenceflow"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                className="grid grid-cols-1 lg:grid-cols-12 gap-5"
-              >
-                {/* DOCUMENT INPUT BLOCK (6 COLS) */}
-                <div className="lg:col-span-6 bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-4">
+              <SectionCard>
+                <div className="grid gap-4 xl:grid-cols-2">
                   <div>
-                    <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-cyan-400" />
-                      EvidenceFlow AI: Document Ingestion Console
-                    </h2>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">Ingest unstructured FIR forms, witness reports, or cell records into statewide database</p>
-                  </div>
-
-                  {/* PRELOADED FIR DEMO CLICKS */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-bold">Demo Quick-Presets (1-Click Tryout)</span>
-                    <div className="flex flex-col gap-1.5">
-                      {SAMPLE_DOCS.map((doc, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setDocText(doc.text)}
-                          className="text-left text-xs bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white px-3 py-2.5 rounded-lg border border-slate-800/80 hover:border-slate-700 transition flex items-center gap-2 font-mono"
-                        >
-                          <span className="text-[9px] bg-cyan-950 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-900/60">Sample {i+1}</span>
-                          <span className="truncate">{doc.name}</span>
-                        </button>
-                      ))}
+                    <h3 className="mb-2 text-xs font-extrabold uppercase text-[#063f9f]">Crime Trends Over Time</h3>
+                    <div className="h-[180px]">
+                      <ResponsiveContainer>
+                        <LineChart data={trendData}>
+                          <CartesianGrid stroke="#e5e7eb" vertical={false} />
+                          <XAxis dataKey="day" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} width={28} />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="theft" stroke="#2563eb" strokeWidth={3} dot={{ r: 2 }} />
+                          <Line type="monotone" dataKey="assault" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} />
+                          <Line type="monotone" dataKey="cyber" stroke="#7c3aed" strokeWidth={2} dot={{ r: 2 }} />
+                          <Line type="monotone" dataKey="robbery" stroke="#f97316" strokeWidth={2} dot={{ r: 2 }} />
+                          <Line type="monotone" dataKey="others" stroke="#16a34a" strokeWidth={2} dot={{ r: 2 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
-
-                  {/* TEXT AREA */}
-                  <div className="flex-1 flex flex-col gap-2">
-                    <textarea
-                      value={docText}
-                      onChange={(e) => setDocText(e.target.value)}
-                      placeholder="Paste raw, messy police document, handwritten FIR transcript, call logs or vehicle scan records here..."
-                      className="w-full h-[260px] bg-slate-900/80 border border-slate-850 focus:border-cyan-500 rounded-xl p-3.5 text-xs font-mono leading-relaxed text-slate-200 focus:outline-none resize-none transition"
-                    ></textarea>
-                    
-                    <button
-                      onClick={handleAnalyze}
-                      disabled={analyzing || !docText.trim()}
-                      className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {analyzing ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>RUNNING ADVANCED NER & KNOWLEDGE EXTRACTION...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4" />
-                          <span>ANALYZE EVIDENCE WITH GEMINI 3.5-FLASH</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* EXTRACTION RESULTS (6 COLS) */}
-                <div className="lg:col-span-6 bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-4">
-                  <div className="flex justify-between items-center border-b border-slate-900 pb-2">
-                    <div>
-                      <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-cyan-400" />
-                        AI Extraction Output & Validations
-                      </h2>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">Structured entities and data discrepancy alerts</p>
-                    </div>
-                    {newlyAnalyzed && (
-                      <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-900/60 px-2 py-0.5 rounded font-mono uppercase font-bold animate-pulse">
-                        New Ingest
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto max-h-[500px] flex flex-col gap-4 pr-1">
-                    {selectedIncident ? (
-                      <div className="flex flex-col gap-4">
-                        
-                        {/* CASE HEAD */}
-                        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col gap-2">
-                          <div className="flex justify-between items-start">
-                            <span className="text-xs font-mono text-cyan-400 uppercase font-semibold">{selectedIncident.category}</span>
-                            <span className="text-xs font-mono text-slate-500">Case ID: {selectedIncident.id}</span>
-                          </div>
-                          <h3 className="text-sm font-bold text-white">{selectedIncident.title}</h3>
-                          <p className="text-xs text-slate-400 leading-relaxed">{selectedIncident.description}</p>
-                          <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-800/60 text-[11px] font-mono text-slate-500">
-                            <span>District: <strong>{selectedIncident.location.district} ({selectedIncident.location.area})</strong></span>
-                            <span>Time: <strong>{selectedIncident.date} {selectedIncident.time}</strong></span>
-                          </div>
-                        </div>
-
-                        {/* EVIDENCE SCORE */}
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-slate-900/40 border border-slate-900 rounded-xl p-3">
-                          <div className="md:col-span-4 flex flex-col items-center border-r border-slate-900 pr-2">
-                            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Completeness</span>
-                            <div className="text-2xl font-display font-bold text-cyan-400 font-mono mt-1">{selectedIncident.evidenceCompleteness}%</div>
-                          </div>
-                          <div className="md:col-span-8 text-xs text-slate-400 leading-relaxed font-mono">
-                            <p>
-                              Overall report fidelity score of this case. High completeness indicates key fields (witnesses, phones, and location) are successfully populated.
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* EXTRACTED ENTITIES TAGS */}
-                        <div className="flex flex-col gap-2.5">
-                          <h4 className="text-xs font-mono text-slate-400 font-bold uppercase tracking-wider border-b border-slate-900 pb-1">
-                            Named Entity Recognition (NER) Output
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                            
-                            {/* Suspects */}
-                            <div className="bg-slate-900/40 border border-slate-900 p-2.5 rounded-lg flex flex-col gap-1.5">
-                              <span className="text-[10px] font-mono text-rose-400 font-bold uppercase tracking-wider">Suspects</span>
-                              <div className="flex flex-wrap gap-1">
-                                {selectedIncident.extractedEntities.suspects.length === 0 ? <span className="text-[11px] text-slate-600 font-mono">None detected</span> : 
-                                  selectedIncident.extractedEntities.suspects.map(s => <span key={s} className="text-[10px] bg-rose-950/40 border border-rose-900/30 text-rose-400 px-1.5 py-0.5 rounded font-mono">{s}</span>)
-                                }
-                              </div>
-                            </div>
-
-                            {/* Victims */}
-                            <div className="bg-slate-900/40 border border-slate-900 p-2.5 rounded-lg flex flex-col gap-1.5">
-                              <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Victims</span>
-                              <div className="flex flex-wrap gap-1">
-                                {selectedIncident.extractedEntities.victims.length === 0 ? <span className="text-[11px] text-slate-600 font-mono">None detected</span> : 
-                                  selectedIncident.extractedEntities.victims.map(s => <span key={s} className="text-[10px] bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 px-1.5 py-0.5 rounded font-mono">{s}</span>)
-                                }
-                              </div>
-                            </div>
-
-                            {/* Vehicles */}
-                            <div className="bg-slate-900/40 border border-slate-900 p-2.5 rounded-lg flex flex-col gap-1.5">
-                              <span className="text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-wider">Vehicles</span>
-                              <div className="flex flex-wrap gap-1">
-                                {selectedIncident.extractedEntities.vehicles.length === 0 ? <span className="text-[11px] text-slate-600 font-mono">None detected</span> : 
-                                  selectedIncident.extractedEntities.vehicles.map(s => <span key={s} className="text-[10px] bg-cyan-950/40 border border-cyan-900/30 text-cyan-400 px-1.5 py-0.5 rounded font-mono">{s}</span>)
-                                }
-                              </div>
-                            </div>
-
-                            {/* Weapons */}
-                            <div className="bg-slate-900/40 border border-slate-900 p-2.5 rounded-lg flex flex-col gap-1.5">
-                              <span className="text-[10px] font-mono text-amber-400 font-bold uppercase tracking-wider">Weapons</span>
-                              <div className="flex flex-wrap gap-1">
-                                {selectedIncident.extractedEntities.weapons.length === 0 ? <span className="text-[11px] text-slate-600 font-mono">None detected</span> : 
-                                  selectedIncident.extractedEntities.weapons.map(s => <span key={s} className="text-[10px] bg-amber-950/40 border border-amber-900/30 text-amber-400 px-1.5 py-0.5 rounded font-mono">{s}</span>)
-                                }
-                              </div>
-                            </div>
-
-                            {/* Phones */}
-                            <div className="bg-slate-900/40 border border-slate-900 p-2.5 rounded-lg flex flex-col gap-1.5">
-                              <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider">Mobile Phones</span>
-                              <div className="flex flex-wrap gap-1">
-                                {selectedIncident.extractedEntities.phones.length === 0 ? <span className="text-[11px] text-slate-600 font-mono">None detected</span> : 
-                                  selectedIncident.extractedEntities.phones.map(s => <span key={s} className="text-[10px] bg-indigo-950/40 border border-indigo-900/30 text-indigo-400 px-1.5 py-0.5 rounded font-mono">{s}</span>)
-                                }
-                              </div>
-                            </div>
-
-                            {/* Organizations */}
-                            <div className="bg-slate-900/40 border border-slate-900 p-2.5 rounded-lg flex flex-col gap-1.5">
-                              <span className="text-[10px] font-mono text-fuchsia-400 font-bold uppercase tracking-wider">Organizations</span>
-                              <div className="flex flex-wrap gap-1">
-                                {selectedIncident.extractedEntities.organizations.length === 0 ? <span className="text-[11px] text-slate-600 font-mono">None detected</span> : 
-                                  selectedIncident.extractedEntities.organizations.map(s => <span key={s} className="text-[10px] bg-fuchsia-950/40 border border-fuchsia-900/30 text-fuchsia-400 px-1.5 py-0.5 rounded font-mono">{s}</span>)
-                                }
-                              </div>
-                            </div>
-
-                          </div>
-                        </div>
-
-                        {/* DATA CHECKS & ALERT CHECKS */}
-                        <div className="flex flex-col gap-2 bg-slate-900/40 border border-slate-900 rounded-xl p-4">
-                          <h4 className="text-xs font-mono text-rose-400 font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                            <AlertTriangle className="w-4 h-4" />
-                            Data Contradiction & Validation Alerts
-                          </h4>
-                          <div className="flex flex-col gap-1.5 font-mono text-xs">
-                            {selectedIncident.validationAlerts?.length === 0 ? (
-                              <div className="flex items-center gap-2 text-emerald-400 py-1">
-                                <CheckCircle className="w-4 h-4" />
-                                <span>Complete validation check successful. No discrepancies detected in document chronologies or signatures.</span>
-                              </div>
-                            ) : (
-                              selectedIncident.validationAlerts?.map((alertStr, idx) => (
-                                <div key={idx} className="flex items-start gap-2 text-rose-300 bg-rose-950/15 border border-rose-900/30 px-3 py-2 rounded-lg">
-                                  <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                                  <span className="leading-relaxed text-[11px]">{alertStr}</span>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-
-                      </div>
-                    ) : (
-                      <div className="text-center py-20 text-slate-500 font-mono">
-                        Select a sample preset or enter text and click Analyze to test.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* TAB 3: CRIME KNOWLEDGE GRAPH */}
-            {activeTab === 'knowledgegraph' && (
-              <motion.div 
-                key="knowledgegraph"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                className="bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-4"
-              >
-                <div className="flex justify-between items-start border-b border-slate-900 pb-3 flex-wrap gap-4">
                   <div>
-                    <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                      <Network className="w-4 h-4 text-cyan-400 animate-pulse" />
-                      Statewide Crime Knowledge Graph Explorer
-                    </h2>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">Explore relationships between suspects, victims, phone numbers, weapons, and incident ledgers</p>
-                  </div>
-
-                  {/* KNOWLEDGE SEARCH AND FILTER TOOLS */}
-                  <div className="flex items-center gap-3.5 flex-wrap">
-                    <div className="relative">
-                      <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                      <input 
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search entities..."
-                        className="bg-slate-900 border border-slate-850 rounded-lg pl-9 pr-4 py-1.5 text-xs focus:outline-none focus:border-cyan-500 w-[200px] font-mono"
-                      />
+                    <h3 className="mb-2 text-xs font-extrabold uppercase text-[#063f9f]">Zone Comparison</h3>
+                    <div className="h-[180px]">
+                      <ResponsiveContainer>
+                        <BarChart data={zoneData}>
+                          <CartesianGrid stroke="#e5e7eb" vertical={false} />
+                          <XAxis dataKey="zone" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} width={28} />
+                          <Tooltip />
+                          <Bar dataKey="current" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="previous" fill="#d1d5db" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-
-                    <div className="flex items-center gap-1.5 text-xs bg-slate-900 border border-slate-850 rounded-lg px-2.5 py-1">
-                      <Filter className="w-3.5 h-3.5 text-slate-400" />
-                      <select 
-                        value={graphFilter} 
-                        onChange={(e) => setGraphFilter(e.target.value)}
-                        className="bg-transparent text-slate-300 font-mono focus:outline-none text-[11px]"
-                      >
-                        <option value="all">All Entities</option>
-                        <option value="Person">Suspects/Victims</option>
-                        <option value="Vehicle">Vehicles</option>
-                        <option value="Weapon">Weapons</option>
-                        <option value="Phone">Mobile Phones</option>
-                        <option value="Organization">Organizations</option>
-                        <option value="Incident">Incidents</option>
-                      </select>
-                    </div>
-
-                    <button 
-                      onClick={handleDownloadGraphData}
-                      className="flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg px-2.5 py-1.5 transition font-mono"
-                      title="Download Graph Data (JSON)"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Export Data</span>
-                    </button>
                   </div>
                 </div>
+              </SectionCard>
 
-                {/* VISUAL SVG NODE-LINK PLOTTER */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-                  
-                  {/* Graph Canvas Block (8 cols) */}
-                  <div className="lg:col-span-8 bg-slate-950/60 border border-slate-900 rounded-xl p-3 flex flex-col justify-center items-center min-h-[480px] relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-10 pointer-events-none"></div>
-
-                    {/* RENDER DYNAMIC SVG CHART */}
-                    <svg viewBox="0 0 700 460" className="w-full max-w-[660px] h-auto">
-                      <defs>
-                        <marker id="arrow" viewBox="0 0 10 10" refX="15" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155" />
-                        </marker>
-                      </defs>
-
-                      {/* Render lines / edges */}
-                      {filteredEdges.map((edge) => {
-                        // Locate source and target positions
-                        const idxS = filteredNodes.findIndex(n => n.id === edge.source);
-                        const idxT = filteredNodes.findIndex(n => n.id === edge.target);
-                        if (idxS === -1 || idxT === -1) return null;
-
-                        // Circular dynamic coordinates simulation
-                        const total = filteredNodes.length;
-                        const radius = 170;
-                        const centerX = 350;
-                        const centerY = 230;
-
-                        const x1 = centerX + radius * Math.cos((idxS / total) * 2 * Math.PI);
-                        const y1 = centerY + radius * Math.sin((idxS / total) * 2 * Math.PI);
-                        
-                        const x2 = centerX + radius * Math.cos((idxT / total) * 2 * Math.PI);
-                        const y2 = centerY + radius * Math.sin((idxT / total) * 2 * Math.PI);
-
-                        const isHighlighted = selectedNode && (edge.source === selectedNode.id || edge.target === selectedNode.id);
-
-                        return (
-                          <g key={edge.id}>
-                            <line
-                              x1={x1}
-                              y1={y1}
-                              x2={x2}
-                              y2={y2}
-                              stroke={isHighlighted ? "#06b6d4" : "rgba(51, 65, 85, 0.45)"}
-                              strokeWidth={isHighlighted ? "2" : "1"}
-                              markerEnd="url(#arrow)"
-                              className="transition"
-                            />
-                            {/* Label text in middle */}
-                            <text
-                              x={(x1 + x2) / 2}
-                              y={(y1 + y2) / 2 - 3}
-                              textAnchor="middle"
-                              fill={isHighlighted ? "#06b6d4" : "#475569"}
-                              fontSize="8"
-                              fontFamily="JetBrains Mono"
-                              className="opacity-70 group-hover:opacity-100 select-none"
-                            >
-                              {edge.type}
-                            </text>
-                          </g>
-                        );
-                      })}
-
-                      {/* Render Nodes / Circles */}
-                      {filteredNodes.map((node, idx) => {
-                        const total = filteredNodes.length;
-                        const radius = 170;
-                        const centerX = 350;
-                        const centerY = 230;
-
-                        // Distribute nodes evenly in circle for absolute clean spacing!
-                        const x = centerX + radius * Math.cos((idx / total) * 2 * Math.PI);
-                        const y = centerY + radius * Math.sin((idx / total) * 2 * Math.PI);
-
-                        const isSelected = selectedNode?.id === node.id;
-                        
-                        // Node Colors based on Type
-                        const colorClass = 
-                          node.type === "Incident" ? "#ef4444" :
-                          node.type === "Person" ? "#f97316" :
-                          node.type === "Vehicle" ? "#06b6d4" :
-                          node.type === "Weapon" ? "#eab308" :
-                          node.type === "Phone" ? "#6366f1" : "#d946ef";
-
-                        return (
-                          <g 
-                            key={node.id} 
-                            transform={`translate(${x}, ${y})`}
-                            onClick={() => setSelectedNode(node)}
-                            className="cursor-pointer group"
-                          >
-                            <circle 
-                              r={isSelected ? "14" : "10"}
-                              fill={isSelected ? "#ffffff" : colorClass}
-                              stroke="#020617"
-                              strokeWidth="2.5"
-                              className="transition-all duration-300 group-hover:scale-125"
-                            />
-                            
-                            {/* Short text tags */}
-                            <text
-                              y={isSelected ? "25" : "20"}
-                              textAnchor="middle"
-                              fill={isSelected ? "#ffffff" : "#94a3b8"}
-                              fontSize="8"
-                              fontFamily="JetBrains Mono"
-                              fontWeight={isSelected ? "bold" : "normal"}
-                              className="pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition select-none"
-                            >
-                              {node.label.split(" ")[0]}
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
-                  </div>
-
-                  {/* Relationship Inspector Panel (4 cols) */}
-                  <div className="lg:col-span-4 flex flex-col gap-4 bg-slate-900/40 border border-slate-900 rounded-xl p-4">
-                    <h3 className="text-xs font-mono font-semibold tracking-wider text-slate-400 uppercase border-b border-slate-850 pb-2">
-                      Relationship Investigator
-                    </h3>
-
-                    {selectedNode ? (
-                      <div className="flex flex-col gap-4">
-                        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3.5 flex flex-col gap-1">
-                          <span className="text-[9px] font-mono text-cyan-400 uppercase">{selectedNode.type} Entity</span>
-                          <h4 className="text-sm font-bold text-white mt-0.5">{selectedNode.label}</h4>
-                          <span className="text-[10px] text-slate-500 font-mono mt-1">ID: {selectedNode.id}</span>
-                        </div>
-
-                        {/* Associated Links */}
-                        <div className="flex flex-col gap-2">
-                          <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">
-                            Direct Connected Links
-                          </span>
-                          <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto">
-                            {graph.edges
-                              .filter(e => e.source === selectedNode.id || e.target === selectedNode.id)
-                              .map(edge => {
-                                const sourceNode = graph.nodes.find(n => n.id === edge.source);
-                                const targetNode = graph.nodes.find(n => n.id === edge.target);
-                                const otherNode = edge.source === selectedNode.id ? targetNode : sourceNode;
-                                
-                                return (
-                                  <div key={edge.id} className="bg-slate-950/60 border border-slate-900 p-2.5 rounded-lg flex flex-col gap-1">
-                                    <div className="flex justify-between items-center text-[10px] font-mono">
-                                      <span className="text-cyan-400 font-semibold">{edge.type}</span>
-                                      <span className="text-slate-600">{otherNode?.type}</span>
-                                    </div>
-                                    <h5 className="text-xs font-bold text-slate-200">{otherNode?.label}</h5>
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        </div>
-
-                        <button 
-                          onClick={() => setSelectedNode(null)}
-                          className="w-full bg-slate-900 hover:bg-slate-850 text-slate-300 text-xs py-2 rounded border border-slate-800 transition font-mono"
-                        >
-                          Clear Selection
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center py-12 text-xs text-slate-500 font-mono">
-                        <Network className="w-8 h-8 stroke-[1.2] text-slate-700 mb-2" />
-                        <span>Click any node in the circular network to isolate its connections and trace investigative relationships in real time.</span>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              </motion.div>
-            )}
-
-            {/* TAB 4: SIMULATION ENGINE (INTERVENTIONS FORECAST) */}
-            {activeTab === 'simulation' && (
-              <motion.div 
-                key="simulation"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                className="grid grid-cols-1 lg:grid-cols-12 gap-5"
-              >
-                {/* INTERVENTION CONFIG FORM (5 COLS) */}
-                <div className="lg:col-span-5 bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-4">
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                      <Sliders className="w-4 h-4 text-cyan-400" />
-                      Intervention Modeling Sandbox
-                    </h2>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">Model strategic resource adjustments and forecast risk mitigation impacts</p>
-                  </div>
-
-                  <div className="flex flex-col gap-3.5 mt-2">
-                    
-                    {/* District selection */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">Target District</label>
-                      <select
-                        value={simDistrict}
-                        onChange={(e) => setSimDistrict(e.target.value)}
-                        className="bg-slate-900 border border-slate-850 focus:border-cyan-500 rounded-lg px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none"
-                      >
-                        {districts.map(d => (
-                          <option key={d.name} value={d.name}>{d.name} (Risk: {d.crimeIndex})</option>
+              <div className="grid gap-3 xl:grid-cols-[1fr_1fr]">
+                <SectionCard title="Recent Cases" action={<StatusPill tone="slate">{filteredIncidents.length} shown</StatusPill>}>
+                  <div className="max-h-[210px] overflow-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr>{["FIR No.", "Title", "District", "Severity"].map((h) => <th key={h} className="pb-2 font-black">{h}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {filteredIncidents.map((incident) => (
+                          <tr key={incident.id} onClick={() => setSelectedIncidentId(incident.id)} className="cursor-pointer border-t border-slate-100 hover:bg-blue-50">
+                            <td className="py-2 font-semibold">{incident.id.slice(-10)}</td>
+                            <td className="py-2 font-semibold">{incident.title}</td>
+                            <td className="py-2">{incident.location.district}</td>
+                            <td className="py-2"><StatusPill tone={incident.severity === "Critical" || incident.severity === "High" ? "red" : "orange"}>{incident.severity}</StatusPill></td>
+                          </tr>
                         ))}
-                      </select>
-                    </div>
-
-                    {/* Intervention Type */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">Intervention Strategy</label>
-                      <select
-                        value={simIntervention}
-                        onChange={(e) => setSimIntervention(e.target.value as any)}
-                        className="bg-slate-900 border border-slate-850 focus:border-cyan-500 rounded-lg px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none"
-                      >
-                        <option value="Patrol Reallocation">Patrol Reallocation (Beat Saturation)</option>
-                        <option value="Temporary Checkpoints">Temporary Checkpoints Mesh</option>
-                        <option value="Street Lighting">Smart Street Lighting & Infra</option>
-                        <option value="Drone Surveillance">Tactical Drone Surveillance</option>
-                        <option value="Community Outreach">Community Policing Outreach</option>
-                      </select>
-                    </div>
-
-                    {/* Simulation parameters description */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">Simulation Parameters & Directives</label>
-                      <textarea
-                        value={simDetails}
-                        onChange={(e) => setSimDetails(e.target.value)}
-                        placeholder="Define custom simulation directives, weather, local festival impacts or exact unit shifts... e.g., 'Deploy 3 extra SUVs from Gokulam to Devaraja market during Mysore Dussehra festival.'"
-                        className="bg-slate-900 border border-slate-850 focus:border-cyan-500 rounded-lg p-3 text-xs text-slate-200 font-mono h-[140px] focus:outline-none resize-none transition"
-                      ></textarea>
-                    </div>
-
-                    <button
-                      onClick={handleRunSimulation}
-                      disabled={simulating}
-                      className="w-full bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 font-mono text-xs"
-                    >
-                      {simulating ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>AI RUNNING COMPUTATIONAL FORECASTING...</span>
-                        </>
-                      ) : (
-                        <>
-                          <TrendingUp className="w-4 h-4" />
-                          <span>RUN AI PREDICTIVE SIMULATION</span>
-                        </>
-                      )}
-                    </button>
-
+                      </tbody>
+                    </table>
                   </div>
-                </div>
+                </SectionCard>
 
-                {/* FORECASTING OUTCOME (7 COLS) */}
-                <div className="lg:col-span-7 bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-4">
-                  <h2 className="text-sm font-semibold text-slate-100 border-b border-slate-900 pb-3 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-cyan-400" />
-                    AI Outcome Projections & Impact Forecast
-                  </h2>
-
-                  {simResult ? (
-                    <div className="flex flex-col gap-5">
-                      
-                      {/* GAUGE CONTRAST DISPLAY */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        
-                        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
-                          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">Baseline Crime Risk</span>
-                          <div className="text-3xl font-display font-bold text-slate-300 font-mono mt-1.5">{simResult.baselineRisk}</div>
-                          <span className="text-[9px] text-slate-500 font-mono mt-1 uppercase">Before Deployment</span>
-                        </div>
-
-                        <div className="bg-cyan-950/20 border border-cyan-900/30 rounded-xl p-4 flex flex-col items-center justify-center relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-bl from-cyan-500/10 to-transparent pointer-events-none"></div>
-                          <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider font-semibold">Projected Crime Risk</span>
-                          <div className="text-4xl font-display font-bold text-cyan-400 font-mono mt-1.5">
-                            {simResult.projectedRisk}
-                          </div>
-                          <span className="text-[9px] text-emerald-400 font-mono mt-1 uppercase font-bold">
-                            ↓ {simResult.baselineRisk - simResult.projectedRisk}% Mitigation
-                          </span>
-                        </div>
-
-                      </div>
-
-                      {/* STATS */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-slate-900/40 border border-slate-900 p-3 rounded-lg flex items-center gap-3">
-                          <DollarSign className="w-6 h-6 text-yellow-500 shrink-0" />
-                          <div>
-                            <span className="text-[9px] font-mono text-slate-500 uppercase">Estimated Budget</span>
-                            <span className="text-sm font-bold text-slate-200 block font-mono">₹{simResult.cost.toLocaleString('en-IN')}</span>
-                          </div>
-                        </div>
-
-                        <div className="bg-slate-900/40 border border-slate-900 p-3 rounded-lg flex items-center gap-3">
-                          <CheckCircle className="w-6 h-6 text-cyan-400 shrink-0" />
-                          <div>
-                            <span className="text-[9px] font-mono text-slate-500 uppercase">Forecast Confidence</span>
-                            <span className="text-sm font-bold text-cyan-400 block font-mono">{simResult.confidence}%</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* TEXTUAL EXPLANATORY REASONING */}
-                      <div className="flex flex-col gap-2.5 bg-slate-900/40 border border-slate-900 rounded-xl p-4">
-                        <h4 className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider border-b border-slate-850 pb-1.5 flex items-center gap-1.5">
-                          <Sparkles className="w-4 h-4 text-yellow-400" />
-                          Generative Tactical Impact Forecast
-                        </h4>
-                        <p className="text-xs font-mono leading-relaxed text-slate-300">
-                          {simResult.benefit}
-                        </p>
-                      </div>
-
-                      {/* NOTICE BANNER */}
-                      <div className="bg-slate-900 border border-slate-850 p-3.5 rounded-xl text-[11px] text-slate-400 leading-relaxed font-mono flex gap-2">
-                        <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                        <span>The simulation projection was generated using localized predictive equations coupled with spatial context grids. This data assists Command Center coordinators in testing resource plans before live field execution.</span>
-                      </div>
-
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center py-20 text-xs text-slate-500 font-mono">
-                      <Sliders className="w-8 h-8 stroke-[1.2] text-slate-700 mb-2" />
-                      <span>Adjust the modeling parameters on the left and click 'Run Simulation' to load predictive outputs.</span>
-                    </div>
-                  )}
-                </div>
-
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-        </section>
-
-      </main>
-
-      {/* COMPARE DISTRICTS MODAL */}
-      <AnimatePresence>
-        {compareMode && compareDistrict && activeDistrictMetrics && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur flex items-center justify-center p-4 overflow-y-auto"
-            onClick={() => setCompareDistrict(null)}
-          >
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-slate-900 border border-slate-700 rounded-xl max-w-5xl w-full flex flex-col shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
-                <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400"><path d="M16 3h5v5"></path><path d="M4 21h5v-5"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg>
-                  Tactical Comparison
-                </h3>
-                <button 
-                  onClick={() => setCompareDistrict(null)}
-                  className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <SectionCard title="Active Investigation Queue">
+                  <div className="max-h-[210px] overflow-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr>{["Case", "Officer Action", "Priority", "Status"].map((h) => <th key={h} className="pb-2 font-black">{h}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {recommendations.map((rec) => (
+                          <tr key={rec.id} className="border-t border-slate-100">
+                            <td className="py-2 font-semibold">{rec.district}</td>
+                            <td className="py-2">{rec.title}</td>
+                            <td className="py-2"><StatusPill tone={rec.riskScore >= 80 ? "red" : "orange"}>{rec.riskScore}</StatusPill></td>
+                            <td className="py-2 font-bold text-blue-700">{rec.status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </SectionCard>
               </div>
-              
-              <div className="grid grid-cols-2 p-5 gap-6">
-                {/* District A (Selected) */}
-                <div className="flex flex-col gap-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[10px] font-mono tracking-wider text-cyan-400 font-semibold uppercase">Primary</span>
-                      <h4 className="text-xl font-bold text-white mt-0.5">{activeDistrictMetrics.name}</h4>
+            </div>
+
+            <div className="min-w-0 space-y-3">
+              <SectionCard title="Case Insights & Intelligence">
+                {selectedIncident ? (
+                  <>
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <h3 className="text-xs font-black uppercase text-[#063f9f]">Evidence Completeness Score</h3>
+                        <StatusPill tone="blue">{selectedIncident.category}</StatusPill>
+                      </div>
+                      <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+                        <div className="relative h-28">
+                          <ResponsiveContainer>
+                            <PieChart>
+                              <Pie data={[{ value: selectedIncident.evidenceCompleteness }, { value: 100 - selectedIncident.evidenceCompleteness }]} dataKey="value" innerRadius={36} outerRadius={54} startAngle={90} endAngle={-270}>
+                                <Cell fill="#2faf68" />
+                                <Cell fill="#dce5ee" />
+                              </Pie>
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex items-center justify-center text-2xl font-black">{selectedIncident.evidenceCompleteness}%</div>
+                        </div>
+                        <div className="space-y-1.5 text-xs font-semibold">
+                          {evidenceItems.map(([label, ok]) => (
+                            <div key={String(label)} className="flex items-center gap-2">
+                              {ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-rose-500" />}
+                              {label}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <span className={`px-2.5 py-1 text-xs font-mono border rounded uppercase font-semibold ${
-                      activeDistrictMetrics.riskLevel === "Critical" ? "bg-red-950/40 border-red-900 text-red-400" :
-                      activeDistrictMetrics.riskLevel === "High" ? "bg-orange-950/40 border-orange-900 text-orange-400" :
-                      activeDistrictMetrics.riskLevel === "Medium" ? "bg-yellow-950/40 border-yellow-900 text-yellow-400" :
-                      "bg-emerald-950/40 border-emerald-900 text-emerald-400"
-                    }`}>
-                      {activeDistrictMetrics.riskLevel} Risk
-                    </span>
-                  </div>
-                  
-                  <div className="bg-slate-950/50 rounded-lg p-4 grid grid-cols-2 gap-4 border border-slate-800/50">
-                    <div>
-                      <span className="text-[10px] font-mono text-slate-500 uppercase">Crime Index</span>
-                      <p className="text-xl font-bold font-mono text-slate-200">{activeDistrictMetrics.crimeIndex}<span className="text-xs text-slate-500">/100</span></p>
+
+                    <div className="mt-3 rounded-lg border border-slate-200 p-3">
+                      <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">Extracted Entities</h3>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <EntityBox title={`Suspects (${selectedIncident.extractedEntities.suspects.length})`} items={selectedIncident.extractedEntities.suspects} />
+                        <EntityBox title={`Victims (${selectedIncident.extractedEntities.victims.length})`} items={selectedIncident.extractedEntities.victims} />
+                      </div>
+                      <div className="mt-2">
+                        <EntityBox title="Linked Entities" items={[...selectedIncident.extractedEntities.vehicles, ...selectedIncident.extractedEntities.phones, ...selectedIncident.extractedEntities.weapons, ...selectedIncident.extractedEntities.organizations]} />
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[10px] font-mono text-slate-500 uppercase">Patrol Units</span>
-                      <p className="text-xl font-bold font-mono text-cyan-400">{activeDistrictMetrics.patrolAvailable}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-mono text-slate-500 uppercase">Total Logged</span>
-                      <p className="text-xl font-bold font-mono text-slate-200">{activeDistrictMetrics.crimeCount}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-mono text-slate-500 uppercase">Active Hotspots</span>
-                      <p className="text-xl font-bold font-mono text-orange-400">{activeDistrictMetrics.hotspots.length}</p>
+                  </>
+                ) : (
+                  <p className="text-sm font-semibold text-slate-600">No case selected.</p>
+                )}
+              </SectionCard>
+
+              {primaryRecommendation && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
+                  <div className="flex gap-3">
+                    <ShieldCheck className="h-8 w-8 shrink-0 text-orange-500" />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-xs font-black uppercase text-[#07152f]">Recommended Action</h3>
+                      <p className="mt-2 text-sm font-bold">{primaryRecommendation.title}</p>
+                      <p className="text-xs font-medium">{primaryRecommendation.reason}</p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-[#063f9f]">Confidence</span>
+                        <div className="h-2 flex-1 rounded-full bg-white">
+                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${primaryRecommendation.confidence}%` }} />
+                        </div>
+                        <span className="text-lg font-black text-emerald-600">{primaryRecommendation.confidence}%</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button onClick={() => updateRecommendation(primaryRecommendation.id, "deploy")} className="rounded-md bg-[#06295c] px-3 py-2 text-xs font-black text-white">Deploy</button>
+                        <button onClick={() => updateRecommendation(primaryRecommendation.id, "dismiss")} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black text-[#06295c]">Dismiss</button>
+                      </div>
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* District B (Compare) */}
-                {(() => {
-                  const compDist = districts.find(d => d.name === compareDistrict);
-                  if (!compDist) return null;
-                  return (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="text-[10px] font-mono tracking-wider text-purple-400 font-semibold uppercase">Comparison</span>
-                          <h4 className="text-xl font-bold text-white mt-0.5">{compDist.name}</h4>
-                        </div>
-                        <span className={`px-2.5 py-1 text-xs font-mono border rounded uppercase font-semibold ${
-                          compDist.riskLevel === "Critical" ? "bg-red-950/40 border-red-900 text-red-400" :
-                          compDist.riskLevel === "High" ? "bg-orange-950/40 border-orange-900 text-orange-400" :
-                          compDist.riskLevel === "Medium" ? "bg-yellow-950/40 border-yellow-900 text-yellow-400" :
-                          "bg-emerald-950/40 border-emerald-900 text-emerald-400"
-                        }`}>
-                          {compDist.riskLevel} Risk
-                        </span>
-                      </div>
-                      
-                      <div className="bg-slate-950/50 rounded-lg p-4 grid grid-cols-2 gap-4 border border-slate-800/50">
-                        <div>
-                          <span className="text-[10px] font-mono text-slate-500 uppercase">Crime Index</span>
-                          <p className="text-xl font-bold font-mono text-slate-200">{compDist.crimeIndex}<span className="text-xs text-slate-500">/100</span></p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-mono text-slate-500 uppercase">Patrol Units</span>
-                          <p className="text-xl font-bold font-mono text-purple-400">{compDist.patrolAvailable}</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-mono text-slate-500 uppercase">Total Logged</span>
-                          <p className="text-xl font-bold font-mono text-slate-200">{compDist.crimeCount}</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-mono text-slate-500 uppercase">Active Hotspots</span>
-                          <p className="text-xl font-bold font-mono text-orange-400">{compDist.hotspots.length}</p>
-                        </div>
+              {latestAnomaly && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 shadow-sm">
+                  <div className="flex gap-3">
+                    <AlertTriangle className="h-8 w-8 shrink-0 text-red-500" />
+                    <div>
+                      <h3 className="text-xs font-black uppercase text-[#07152f]">Anomaly Explanation</h3>
+                      <p className="mt-2 text-sm font-semibold">{latestAnomaly.message}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <StatusPill tone="red">{latestAnomaly.severity}</StatusPill>
+                        <StatusPill tone="orange">Score {latestAnomaly.score}</StatusPill>
+                        <StatusPill tone="slate">{latestAnomaly.district}</StatusPill>
                       </div>
                     </div>
-                  );
-                })()}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  </div>
+                </div>
+              )}
 
-      {/* FOOTER */}
-      <footer className="border-t border-slate-900 bg-slate-950 mt-12 py-5 px-6 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-4">
-        <p className="font-mono">
-          &copy; {new Date().getFullYear()} CRIMEVERSE AI CORE. DEPLOYED IN SECURE CONTAINER ENV.
-        </p>
-        <div className="flex gap-4 font-mono">
-          <a href="#" className="hover:text-slate-300 transition">TERMS OF PATROL SERVICE</a>
-          <span>|</span>
-          <a href="#" className="hover:text-slate-300 transition">INTELLIGENCE ENCRYPT PORTAL</a>
+              <SectionCard title="AI Engine Status">
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(aiStatus?.counts ?? {}).slice(0, 8).map(([key, value]) => (
+                    <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      <div className="text-[10px] font-black uppercase text-slate-500">{key}</div>
+                      <div className="text-lg font-black">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            </div>
+          </div>
         </div>
-      </footer>
+
+        <footer className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm md:grid-cols-5">
+          {([
+            [FileText, "Total FIRs (YTD)", "12,458"],
+            [BriefcaseBusiness, "Cases Analyzed", String(aiStatus?.counts.incidents ?? incidents.length)],
+            [Network, "Predictions", String(aiStatus?.counts.hotspotPredictions ?? 0)],
+            [MapPin, "Hotspots", String(predictions?.hotspotPredictions.length ?? 0)]
+          ] satisfies FooterMetric[]).map(([Icon, label, value]) => (
+            <div key={String(label)} className="flex items-center gap-3 md:border-r md:border-slate-200">
+              <Icon className="h-7 w-7 text-[#07152f]" />
+              <div>
+                <div className="text-[10px] font-black uppercase text-[#07152f]">{label}</div>
+                <div className="text-xl font-black">{value}</div>
+              </div>
+            </div>
+          ))}
+          <div className="flex items-center justify-end gap-3 text-xs font-semibold text-slate-700">
+            Last Updated: {new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+            <span className="flex items-center gap-2 font-black text-emerald-600">
+              <span className="h-3 w-3 rounded-full bg-emerald-500" /> LIVE
+            </span>
+          </div>
+        </footer>
+      </div>
+    </main>
+  );
+}
+
+function EntityBox({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <div className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase text-[#063f9f]">
+        <UsersRound className="h-4 w-4 text-blue-600" /> {title}
+      </div>
+      {items.length ? (
+        <ul className="ml-4 list-disc text-xs font-medium leading-5">
+          {items.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : (
+        <div className="text-xs font-semibold text-slate-500">No extracted value</div>
+      )}
     </div>
   );
 }
