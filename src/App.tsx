@@ -192,7 +192,7 @@ function KarnatakaMap({
   const visibleDistricts = districts.filter((district) => selectedDistrict === "All Districts" || district.name === selectedDistrict);
 
   return (
-    <div className="relative min-h-[330px] overflow-hidden rounded-lg bg-[radial-gradient(circle_at_20%_20%,#f8fbff_0,#ffffff_42%,#eef5ff_100%)]">
+    <div className="relative min-h-[300px] overflow-hidden rounded-lg bg-[radial-gradient(circle_at_20%_20%,#f8fbff_0,#ffffff_42%,#eef5ff_100%)] 2xl:min-h-[330px]">
       <div className="absolute left-3 top-10 z-10 flex flex-col overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
         <button onClick={() => setZoom((value) => Math.min(1.25, value + 0.08))} className="h-8 w-8 text-base font-semibold text-slate-700 hover:bg-blue-50" title="Zoom in">+</button>
         <button onClick={() => setZoom((value) => Math.max(0.86, value - 0.08))} className="h-8 w-8 border-t border-slate-200 text-base font-semibold text-slate-700 hover:bg-blue-50" title="Zoom out">-</button>
@@ -697,7 +697,7 @@ export default function App() {
         <div className="flex gap-3">
           <Sidebar active={activeModule} setActive={setActiveModule} />
 
-          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[270px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(520px,1fr)_360px]">
+          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[220px_minmax(0,1fr)_260px] 2xl:grid-cols-[280px_minmax(520px,1fr)_360px]">
             <div className="space-y-3">
               <SectionCard title="Command Center Modules">
                 <div className="grid gap-2">
@@ -711,18 +711,18 @@ export default function App() {
                       key={String(key)}
                       onClick={() => setActiveModule(key as ModuleKey)}
                       className={classNames(
-                        "flex min-h-[76px] items-center gap-3 rounded-lg border p-3 text-left",
+                        "flex min-h-[70px] items-center gap-2 rounded-lg border p-2.5 text-left",
                         activeModule === key ? "border-blue-300 bg-blue-50/80" : "border-slate-200 bg-white hover:bg-slate-50"
                       )}
                     >
-                      <Icon className="h-9 w-9 shrink-0 text-[#063f9f]" />
+                      <Icon className="h-7 w-7 shrink-0 text-[#063f9f] 2xl:h-9 2xl:w-9" />
                       <span>
                         <span className="flex items-center justify-between gap-2 text-xs font-black uppercase text-[#06295c]">
                           <span>{title}</span>
                           {key === "evidence" && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] text-blue-700">{incidents.length}</span>}
                           {key === "graph" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] text-emerald-700">{graph.nodes.length}</span>}
                         </span>
-                        <span className="mt-1 block text-[11px] font-medium leading-4 text-slate-700">{body}</span>
+                        <span className="mt-1 block text-[10px] font-medium leading-4 text-slate-700 2xl:text-[11px]">{body}</span>
                       </span>
                     </button>
                   ))}
@@ -775,7 +775,7 @@ export default function App() {
               </SectionCard>
             </div>
 
-            <div className="min-w-0 space-y-3">
+            <div className="min-w-0 space-y-3 xl:sticky xl:top-3 xl:self-start">
               <SectionCard
                 title={moduleTitle[activeModule]}
                 action={loading ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : <StatusPill tone="green">Live API</StatusPill>}
@@ -846,7 +846,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : activeModule === "simulation" ? (
-                  <div className="grid gap-3 xl:grid-cols-[1fr_330px]">
+                  <div className="grid gap-3 2xl:grid-cols-[1fr_330px]">
                     <div className="rounded-lg border border-slate-200 p-4">
                       <div className="grid gap-3 md:grid-cols-2">
                         <label className="text-xs font-black uppercase text-[#063f9f]">
@@ -884,7 +884,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : activeModule === "cases" ? (
-                  <div className="grid gap-3 xl:grid-cols-[1fr_300px]">
+                  <div className="grid gap-3 2xl:grid-cols-[1fr_300px]">
                     <div className="max-h-[430px] overflow-auto rounded-lg border border-slate-200">
                       <table className="w-full min-w-[620px] text-left text-xs">
                         <thead className="sticky top-0 bg-slate-50">
@@ -925,7 +925,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : activeModule === "analytics" ? (
-                  <div className="grid gap-3 xl:grid-cols-2">
+                  <div className="grid gap-3 2xl:grid-cols-2">
                     <div className="rounded-lg border border-slate-200 p-3">
                       <h3 className="mb-3 text-xs font-black uppercase text-[#063f9f]">Hotspot Predictions</h3>
                       <div className="max-h-[370px] space-y-2 overflow-auto">
@@ -989,7 +989,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : activeModule === "reports" ? (
-                  <div className="grid gap-3 xl:grid-cols-2">
+                  <div className="grid gap-3 2xl:grid-cols-2">
                     <div className="rounded-lg border border-slate-200 p-3">
                       <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">SCRB Report Summary</h3>
                       <ul className="space-y-2 text-sm font-semibold">
@@ -1010,7 +1010,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : activeModule === "settings" ? (
-                  <div className="grid gap-3 xl:grid-cols-2">
+                  <div className="grid gap-3 2xl:grid-cols-2">
                     <div className="rounded-lg border border-slate-200 p-4">
                       <h3 className="text-xs font-black uppercase text-[#063f9f]">System Controls</h3>
                       <button onClick={refreshIntelligence} disabled={busyAction === "refresh"} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60">
@@ -1030,7 +1030,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_310px]">
+                  <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_310px]">
                     <KarnatakaMap
                       districts={districts}
                       selectedDistrict={activeDistrict?.name ?? ""}
@@ -1084,7 +1084,7 @@ export default function App() {
               </SectionCard>
 
               <SectionCard>
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="grid gap-4 2xl:grid-cols-2">
                   <div>
                     <h3 className="mb-2 text-xs font-extrabold uppercase text-[#063f9f]">Crime Trends Over Time</h3>
                     <div className="h-[180px]">
@@ -1173,8 +1173,8 @@ export default function App() {
                         <h3 className="text-xs font-black uppercase text-[#063f9f]">Evidence Completeness Score</h3>
                         <StatusPill tone="blue">{selectedIncident.category}</StatusPill>
                       </div>
-                      <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                        <div className="relative h-28">
+                      <div className="grid gap-2 2xl:grid-cols-[120px_1fr] 2xl:items-center">
+                        <div className="relative h-24 2xl:h-28">
                           <ResponsiveContainer>
                             <PieChart>
                               <Pie data={[{ value: selectedIncident.evidenceCompleteness }, { value: 100 - selectedIncident.evidenceCompleteness }]} dataKey="value" innerRadius={36} outerRadius={54} startAngle={90} endAngle={-270}>
@@ -1183,9 +1183,9 @@ export default function App() {
                               </Pie>
                             </PieChart>
                           </ResponsiveContainer>
-                          <div className="absolute inset-0 flex items-center justify-center text-2xl font-black">{selectedIncident.evidenceCompleteness}%</div>
+                          <div className="absolute inset-0 flex items-center justify-center text-xl font-black 2xl:text-2xl">{selectedIncident.evidenceCompleteness}%</div>
                         </div>
-                        <div className="space-y-1.5 text-xs font-semibold">
+                        <div className="space-y-1.5 text-[11px] font-semibold 2xl:text-xs">
                           {evidenceItems.map(([label, ok]) => (
                             <div key={String(label)} className="flex items-center gap-2">
                               {ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-rose-500" />}
@@ -1198,7 +1198,7 @@ export default function App() {
 
                     <div className="mt-3 rounded-lg border border-slate-200 p-3">
                       <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">Extracted Entities</h3>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2 2xl:grid-cols-2">
                         <EntityBox title={`Suspects (${selectedIncident.extractedEntities.suspects.length})`} items={selectedIncident.extractedEntities.suspects} />
                         <EntityBox title={`Victims (${selectedIncident.extractedEntities.victims.length})`} items={selectedIncident.extractedEntities.victims} />
                       </div>
