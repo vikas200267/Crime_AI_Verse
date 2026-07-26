@@ -473,6 +473,17 @@ export default function App() {
   const categories = ["All", "Theft", "Assault", "Fraud", "Homicide", "Vandalism", "Narcotics", "Other"];
   const primaryRecommendation = recommendations.find((item) => item.status === "Pending") ?? recommendations[0];
   const latestAnomaly = anomalies?.anomalies[0] ?? null;
+  const moduleTitle: Record<ModuleKey, string> = {
+    dashboard: "Karnataka Crime Hotspot Map",
+    cases: "FIR Case Intelligence Workspace",
+    analytics: "Predictive Analytics & Anomaly Center",
+    graph: "Crime Knowledge Graph",
+    alerts: "Live Alert Operations",
+    reports: "SCRB Intelligence Reports",
+    settings: "System Settings & Controls",
+    evidence: "EvidenceFlow AI Workbench",
+    simulation: "Intervention Simulation Engine"
+  };
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#f5f8fc] text-[#07152f]">
@@ -581,7 +592,7 @@ export default function App() {
         <div className="flex gap-3">
           <Sidebar active={activeModule} setActive={setActiveModule} />
 
-          <div className="grid min-w-0 flex-1 gap-3 2xl:grid-cols-[300px_minmax(560px,1fr)_390px]">
+          <div className="grid min-w-0 flex-1 gap-3 2xl:grid-cols-[280px_minmax(520px,1fr)_360px]">
             <div className="space-y-3">
               <SectionCard title="Command Center Modules">
                 <div className="grid gap-2">
@@ -657,7 +668,7 @@ export default function App() {
 
             <div className="min-w-0 space-y-3">
               <SectionCard
-                title={activeModule === "graph" ? "Crime Knowledge Graph" : activeModule === "evidence" ? "EvidenceFlow AI Workbench" : activeModule === "simulation" ? "Intervention Simulation Engine" : "Karnataka Crime Hotspot Map"}
+                title={moduleTitle[activeModule]}
                 action={loading ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : <StatusPill tone="green">Live API</StatusPill>}
               >
                 {activeModule === "evidence" ? (
@@ -731,7 +742,7 @@ export default function App() {
                       <div className="grid gap-3 md:grid-cols-2">
                         <label className="text-xs font-black uppercase text-[#063f9f]">
                           Target District
-                          <select value={selectedDistrict} onChange={(event) => setSelectedDistrict(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm text-slate-800">
+                          <select value={activeDistrict?.name ?? ""} onChange={(event) => setSelectedDistrict(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm text-slate-800">
                             {districts.map((district) => <option key={district.name}>{district.name}</option>)}
                           </select>
                         </label>
@@ -761,6 +772,133 @@ export default function App() {
                       ) : (
                         <p className="mt-3 text-sm font-semibold text-slate-600">Choose an intervention and run simulation.</p>
                       )}
+                    </div>
+                  </div>
+                ) : activeModule === "cases" ? (
+                  <div className="grid gap-3 xl:grid-cols-[1fr_300px]">
+                    <div className="max-h-[430px] overflow-auto rounded-lg border border-slate-200">
+                      <table className="w-full min-w-[620px] text-left text-xs">
+                        <thead className="sticky top-0 bg-slate-50">
+                          <tr>
+                            {["FIR No.", "Case Title", "District", "Category", "Evidence", "Status"].map((heading) => (
+                              <th key={heading} className="px-3 py-2 font-black text-[#063f9f]">{heading}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredIncidents.map((incident) => (
+                            <tr key={incident.id} onClick={() => setSelectedIncidentId(incident.id)} className="cursor-pointer border-t border-slate-100 hover:bg-blue-50">
+                              <td className="px-3 py-2 font-bold">{incident.id}</td>
+                              <td className="px-3 py-2 font-semibold">{incident.title}</td>
+                              <td className="px-3 py-2">{incident.location.district}</td>
+                              <td className="px-3 py-2">{incident.category}</td>
+                              <td className="px-3 py-2">{incident.evidenceCompleteness}%</td>
+                              <td className="px-3 py-2"><StatusPill tone="blue">{incident.status}</StatusPill></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <h3 className="text-xs font-black uppercase text-[#063f9f]">Selected Case</h3>
+                      <p className="mt-2 text-sm font-black">{selectedIncident?.title ?? "No case selected"}</p>
+                      <p className="mt-2 text-xs font-medium leading-5">{selectedIncident?.description}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedIncident?.validationAlerts.map((alert) => <StatusPill key={alert} tone="orange">{alert.slice(0, 32)}</StatusPill>)}
+                      </div>
+                    </div>
+                  </div>
+                ) : activeModule === "analytics" ? (
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <h3 className="mb-3 text-xs font-black uppercase text-[#063f9f]">Hotspot Predictions</h3>
+                      <div className="max-h-[370px] space-y-2 overflow-auto">
+                        {(predictions?.hotspotPredictions ?? []).map((hotspot) => (
+                          <button key={`${hotspot.district}-${hotspot.area}`} onClick={() => setSelectedDistrict(hotspot.district)} className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left hover:bg-blue-50">
+                            <div className="flex justify-between gap-3 text-xs font-black">
+                              <span>{hotspot.area}, {hotspot.district}</span>
+                              <span>{hotspot.riskScore}</span>
+                            </div>
+                            <div className="mt-2 h-2 rounded-full bg-slate-100">
+                              <div className="h-full rounded-full bg-gradient-to-r from-yellow-400 to-red-500" style={{ width: `${hotspot.riskScore}%` }} />
+                            </div>
+                            <div className="mt-2 text-[11px] font-semibold text-slate-600">Confidence {hotspot.confidence}% · {hotspot.drivers.slice(0, 2).join(", ")}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <h3 className="mb-3 text-xs font-black uppercase text-[#063f9f]">Anomaly Queue</h3>
+                      <div className="max-h-[370px] space-y-2 overflow-auto">
+                        {(anomalies?.anomalies ?? []).map((anomaly) => (
+                          <div key={anomaly.anomalyId} className="rounded-lg border border-red-100 bg-red-50 p-3">
+                            <div className="flex justify-between gap-3 text-xs font-black text-red-700">
+                              <span>{anomaly.district}</span>
+                              <span>{anomaly.score}</span>
+                            </div>
+                            <p className="mt-2 text-xs font-semibold leading-5">{anomaly.message}</p>
+                            <StatusPill tone={anomaly.severity === "High" ? "red" : "orange"}>{anomaly.severity}</StatusPill>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : activeModule === "alerts" ? (
+                  <div className="grid gap-3 xl:grid-cols-[1fr_260px]">
+                    <div className="max-h-[430px] space-y-2 overflow-auto pr-1">
+                      {alerts.map((alert) => (
+                        <button key={alert.id} onClick={() => markAlertRead(alert.id)} className="flex w-full items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left hover:bg-blue-50">
+                          <AlertTriangle className={classNames("mt-1 h-5 w-5 shrink-0", alert.severity === "Critical" ? "text-red-500" : alert.severity === "Warning" ? "text-orange-500" : "text-blue-500")} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-bold">{alert.message}</span>
+                            <span className="mt-1 block text-xs font-semibold text-slate-500">{alert.district} · {new Date(alert.timestamp).toLocaleString("en-IN")}</span>
+                          </span>
+                          <StatusPill tone={alert.read ? "slate" : "blue"}>{alert.read ? "Read" : "New"}</StatusPill>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <h3 className="text-xs font-black uppercase text-[#063f9f]">Alert Actions</h3>
+                      <p className="mt-2 text-xs font-semibold leading-5">Click an alert to mark it reviewed. Alerts are generated by evidence analysis, simulations, anomaly detection, and hotspot risk changes.</p>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-white p-3"><b>{alerts.filter((item) => !item.read).length}</b><br /><span className="text-xs">Unread</span></div>
+                        <div className="rounded-lg bg-white p-3"><b>{alerts.filter((item) => item.severity === "Critical").length}</b><br /><span className="text-xs">Critical</span></div>
+                      </div>
+                    </div>
+                  </div>
+                ) : activeModule === "reports" ? (
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">SCRB Report Summary</h3>
+                      <ul className="space-y-2 text-sm font-semibold">
+                        <li>Total incidents analyzed: {incidents.length}</li>
+                        <li>Graph nodes: {graph.nodes.length}</li>
+                        <li>Graph relationships: {graph.edges.length}</li>
+                        <li>Hotspot predictions: {predictions?.hotspotPredictions.length ?? 0}</li>
+                        <li>Anomaly signals: {anomalies?.count ?? 0}</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <h3 className="mb-2 text-xs font-black uppercase text-[#063f9f]">Implemented AI Capabilities</h3>
+                      <div className="max-h-[320px] overflow-auto">
+                        {(aiStatus?.implementedCapabilities ?? []).map((capability) => (
+                          <div key={capability} className="border-b border-slate-100 py-2 text-xs font-semibold">{capability}</div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : activeModule === "settings" ? (
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    <div className="rounded-lg border border-slate-200 p-4">
+                      <h3 className="text-xs font-black uppercase text-[#063f9f]">System Controls</h3>
+                      <button onClick={refreshData} className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white">Refresh Intelligence APIs</button>
+                      <button onClick={resetTwin} disabled={busyAction === "reset"} className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-black text-[#06295c]">Reset Digital Twin Demo State</button>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-4">
+                      <h3 className="text-xs font-black uppercase text-[#063f9f]">Backend Connection</h3>
+                      <p className="mt-2 text-sm font-semibold">{aiStatus?.service}</p>
+                      <p className="text-xs font-medium text-slate-600">Official schema root: {aiStatus?.officialSchemaRoot}</p>
+                      <StatusPill tone={error ? "red" : "green"}>{error ? "Attention" : "Operational"}</StatusPill>
                     </div>
                   </div>
                 ) : (
