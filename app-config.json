@@ -7,8 +7,8 @@
   },
   "memory": 512,
   "scripts": {
-    "preserve": "npm install && npm run build",
-    "predeploy": "npm install && npm run build"
+    "preserve": "npm run build",
+    "predeploy": "npm run build"
   },
   "raw": {},
   "catalyst_auth": false,

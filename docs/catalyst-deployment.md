@@ -64,6 +64,7 @@ Later, the frontend can be moved to Catalyst Slate/Web Client Hosting and the ba
 ## Files Added For Catalyst
 
 - `app-config.json`: AppSail managed-runtime configuration.
+- `.catalystignore`: Excludes local-only files from AppSail packaging.
 - `server.ts`: Updated to listen on `X_ZOHO_CATALYST_LISTEN_PORT` when deployed on Catalyst.
 
 ## Local Build Verification
@@ -74,6 +75,24 @@ npm run lint
 npm run build
 npm start
 ```
+
+## Windows EMFILE Fix
+
+If AppSail deployment fails with:
+
+```text
+EMFILE: too many open files
+```
+
+keep `.catalystignore` in the project root. It prevents Catalyst from packaging heavy local folders such as `node_modules`, `.git`, `tmp`, generated presentations, logs, and source maps.
+
+The AppSail `predeploy` script intentionally runs only:
+
+```bash
+npm run build
+```
+
+Do not remove `.catalystignore`; it keeps the deploy package small and avoids Windows file-handle limits.
 
 Local URL:
 
